@@ -1,0 +1,8 @@
+Installing PyQt5
+================
+
+The current version produces an error on installation, so we
+install an older version:
+
+   pip3 install pyqt5==5.14
+   
