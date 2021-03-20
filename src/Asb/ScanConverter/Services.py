@@ -6,13 +6,13 @@ Created on 16.02.2021
 from injector import singleton, inject
 import os
 from PIL import Image, ImageOps
-import numpy
-from skimage.filters import threshold_sauvola
-import tempfile
 import pytesseract
 import re
+from Asb.ScanConverter.ImageDetection import Detectron2ImageDetectionService
+import numpy
+from skimage.filters.thresholding import threshold_sauvola, threshold_otsu
 import cv2
-from future.backports.test.pystone import FALSE
+import tempfile
 
 Image.MAX_IMAGE_PIXELS = None
 
@@ -25,6 +25,7 @@ INDEX = "Indexiert"
 FLOYD_STEINBERG = "Bilder optimal"
 THRESHOLD = "Schwellwert"
 SAUVOLA = "Text optimal"
+MIXED = "Alles optimal (experimentell)"
 
 class GraphicFileInfo:
     
@@ -103,6 +104,11 @@ class FormatConversionService(object):
     '''
     classdocs
     '''
+    
+    @inject
+    def __init__(self, image_detection_service: Detectron2ImageDetectionService):
+        
+        self.image_detection_service = image_detection_service
 
     def perform_changes(self, img: Image, fileinfo: GraphicFileInfo, params: JobDefinition):
         
@@ -174,7 +180,10 @@ class FormatConversionService(object):
             return img, fileinfo
         
         current_width, current_height = img.size
-        
+        img = Image.open("Image1.png")
+        bin_image = self._binarization_mixed(img)
+        bin_image.save("Image1.bin.png")
+
         new_width = int(current_width * params.resolution_change / current_xres)
         new_height = int(current_height * params.resolution_change / current_yres)
         
@@ -192,6 +201,8 @@ class FormatConversionService(object):
             return self._binarization_fixed(img, params.threshold_value)
         if params.binarization_algorithm == SAUVOLA:
             return self._binarization_sauvola(img)
+        if params.binarization_algorithm == MIXED:
+            return self._binarization_mixed(img)
         return img
 
     def _binarization_floyd_steinberg(self, img):
@@ -203,12 +214,32 @@ class FormatConversionService(object):
 
         return img.point(lambda v: 1 if v > threshold else 0, "1")
 
+    def _binarization_otsu(self, img):
+
+        in_array = numpy.array(img)
+        mask = threshold_otsu(in_array)
+        out_array = in_array > mask
+        return Image.fromarray(out_array)
+    
     def _binarization_sauvola(self, img, window_size=41):
 
         in_array = numpy.array(img)
         mask = threshold_sauvola(in_array, window_size=window_size)
         out_array = in_array > mask
         return Image.fromarray(out_array)
+
+    def _binarization_mixed(self, img):
+        
+        text_background = self._binarization_sauvola(img)
+        photo_foreground = self._binarization_floyd_steinberg(img)
+        drawings_foreground = self._binarization_otsu(img)
+        (photo_masks, drawing_masks) = self.image_detection_service.getImageMasks(img)
+        for mask in photo_masks:
+            text_background.paste(photo_foreground, None, Image.fromarray(mask)) 
+        for mask in drawing_masks:
+            text_background.paste(drawings_foreground, None, Image.fromarray(mask)) 
+
+        return text_background
     
     def denoise(self, img: Image, threshold, connectivity):
         

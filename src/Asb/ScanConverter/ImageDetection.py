@@ -8,43 +8,74 @@ from os import path
 import tempfile
 import os
 import numpy
-from Asb.ScanConverter.Services import FormatConversionService
 import time
+import layoutparser
+from cv2 import cv2
 
-class OcropuyImageDetectionService(object):
-    '''
-    classdocs
-    '''
+    
+class Detectron2ImageDetectionService(object):
+    
+    DRAWING = "drawing"
+    PHOTO = "photo"
+    
+    models = {'Prima': {'config': 'lp://PrimaLayout/mask_rcnn_R_50_FPN_3x/config',
+                        'label_map': {1:"TextRegion", 2:"ImageRegion", 3:"TableRegion", 4:"MathsRegion", 5:"SeparatorRegion", 6:"OtherRegion"},
+                        'image_labels': ('ImageRegion',) 
+                        },
+              'PubLayNet1': {'config': 'lp://PubLayNet/mask_rcnn_X_101_32x8d_FPN_3x/config',
+                             'label_map': {0: "Text", 1: "Title", 2: "List", 3:"Table", 4:"Figure"},
+                             'image_labels': ('Figure',)},
+              'PubLayNet2': {'config': 'lp://PubLayNet/mask_rcnn_R_50_FPN_3x/config',
+                             'label_map': {0: "Text", 1: "Title", 2: "List", 3:"Table", 4:"Figure"},
+                             'image_labels': ('Figure',)},
+              'PubLayNet3': {'config': 'lp://PubLayNet/faster_rcnn_R_50_FPN_3x/config',
+                             'label_map': {0: "Text", 1: "Title", 2: "List", 3:"Table", 4:"Figure"},
+                             'image_labels': ('Figure',)},
+              'NewspaperNavigator': {'config': 'lp://NewspaperNavigator/faster_rcnn_R_50_FPN_3x/config',
+                             'label_map': {0: "Photograph", 1: "Illustration", 2: "Map", 3: "Comics/Cartoon", 4: "Editorial Cartoon", 5: "Headline", 6: "Advertisement"},
+                             'image_labels': ('Photograph', 'Illustration', 'Map', 'Comics/Cartoon')}
+            }
 
-    def __init__(self, format_conversion_service: FormatConversionService):
+    def __init__(self, model='PubLayNet3'):
 
-        self.format_conversion_service = format_conversion_service
-
-    def getImageMask(self, img: Image):
+        self.config_path =  self.models[model]['config']
+        self.label_map = self.models[model]['label_map']
+        self.image_labels = self.models[model]['image_labels']
+        self.score_threshold = 0.7
+        self.counter = 0
         
+    def getImageMasks(self, img: Image):
+
         with tempfile.TemporaryDirectory() as tmpdir:
-            #bin_img = self.format_conversion_service._binarization_sauvola(img)
-            bin_img = self.format_conversion_service._binarization_fixed(img, 200)
-            bin_img_path = path.join(tmpdir, "input.bin.png") 
-            bin_img.save(bin_img_path)
-            bin_img_path = path.join(tmpdir, "input.bin.png") 
-            bin_img.save("Image1.bin.png")
-            #cmd = 'bash -c "PYTHONPATH=; source /home/michael/workspace/ocropy/ocropus_venv/bin/activate; ocropus-gpageseg -n --maxlines 2000 --minscale 3.0 %s"' % bin_img_path
-            cmd = 'bash -c "PYTHONPATH=; source /home/michael/workspace/ocropy/ocropus_venv/bin/activate; ocropus-gpageseg -n %s"' % bin_img_path
-            print(cmd)
-            os.system(cmd)
-            time.sleep(20)
-            seg_info_path = path.join(tmpdir, "input.pseg.png")
-            seg_info = Image.open(seg_info_path)
+            tmpfile = path.join(tmpdir, "img.png") 
+            img.save(tmpfile)
+            cv2_image = cv2.imread(tmpfile)
+            cv2_image = cv2_image[..., ::-1]
+            model = layoutparser.Detectron2LayoutModel(
+                config_path = self.config_path, # In model catalog
+                label_map   = self.label_map, # In model`label_map`
+                #extra_config=["MODEL.ROI_HEADS.SCORE_THRESH_TEST", 0.8] # Optional
+            )
+            layout = model.detect(cv2_image)
+            photos = []
+            drawings = []
+            for element in layout:
+                if element.type in self.image_labels and element.score > self.score_threshold:
+                    mask = numpy.zeros((img.height,img.width), dtype=bool)
+                    mask[int(element.block.y_1):int(element.block.y_2), int(element.block.x_1):int(element.block.x_2)] = True
+                    if self.detectType(cv2_image[int(element.block.y_1):int(element.block.y_2),
+                                                 int(element.block.x_1):int(element.block.x_2)]) == self.PHOTO:
+                        photos.append(mask)
+                    else:
+                        drawings.append(mask)
+            
+        return (photos, drawings)
+    
+    def detectType(self, ndarray):
         
-            green_channel = seg_info.getchannel("R")
-            green_channel_array = numpy.array(green_channel, dtype=numpy.uint8)
-            green_channel.save("/tmp/test.png")
-            #red_channel = seg_info.getchannel("R")
-            #red_channel_array = numpy.array(red_channel, dtype=numpy.uint8)
-            mask_gray = numpy.ones((green_channel_array.shape), dtype=numpy.bool)
-            mask_lineart = numpy.ones((green_channel_array.shape), dtype=numpy.bool)
-            mask_gray[green_channel_array == 255] = 0
-            mask_lineart[green_channel_array == 254] = 1
-        
-        return (mask_lineart, mask_gray)
+        histogram = numpy.histogram(ndarray, bins=3)
+        ratio =  (histogram[0][0] + histogram[0][2]) / histogram[0][1]
+        if ratio > 10:
+            return self.DRAWING
+        else:
+            return self.PHOTO 

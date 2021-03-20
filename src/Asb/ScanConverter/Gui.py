@@ -11,9 +11,8 @@ import threading
 from injector import Injector, inject, singleton
 from Asb.ScanConverter.Services import FormatConversionService, GraphicFileInfo,\
     JobDefinition, GRAYSCALE, BLACK_AND_WHITE, FLOYD_STEINBERG, THRESHOLD,\
-    SAUVOLA, PdfService
+    SAUVOLA, MIXED, PdfService
 from PyQt5.QtCore import Qt
-from future.backports.test.pystone import TRUE
 
 TASK_CONVERT_JPEG = "Jpegs nach tif konvertieren"
 TASK_COLLATE_TO_PDF = "Als pdf zusammenfassen"
@@ -235,6 +234,7 @@ class Window(QWidget):
         self.bw_algo_select.addItem(SAUVOLA)
         self.bw_algo_select.addItem(FLOYD_STEINBERG)
         self.bw_algo_select.addItem(THRESHOLD)
+        self.bw_algo_select.addItem(MIXED)
         self.bw_algo_select.currentIndexChanged.connect(self.bw_algo_changed)
         modus_layout.addWidget(self.bw_algo_select)
         
@@ -417,7 +417,7 @@ class Window(QWidget):
         
         dialog = QFileDialog()
         dialog.setFileMode(QFileDialog.ExistingFiles)
-        dialog.setNameFilter("Graphikdateien (*.jpg *.tif *.gif)")
+        dialog.setNameFilter("Graphikdateien (*.jpg *.tif *.gif *.png)")
         
         if dialog.exec_():
             filenames = dialog.selectedFiles()
