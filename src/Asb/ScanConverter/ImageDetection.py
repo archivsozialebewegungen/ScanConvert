@@ -11,6 +11,7 @@ import numpy
 import time
 import layoutparser
 from cv2 import cv2
+from Asb.ScanConverter.Tools import pil_to_cv2image
 
     
 class Detectron2ImageDetectionService(object):
@@ -46,28 +47,24 @@ class Detectron2ImageDetectionService(object):
         
     def getImageMasks(self, img: Image):
 
-        with tempfile.TemporaryDirectory() as tmpdir:
-            tmpfile = path.join(tmpdir, "img.png") 
-            img.save(tmpfile)
-            cv2_image = cv2.imread(tmpfile)
-            cv2_image = cv2_image[..., ::-1]
-            model = layoutparser.Detectron2LayoutModel(
-                config_path = self.config_path, # In model catalog
-                label_map   = self.label_map, # In model`label_map`
-                #extra_config=["MODEL.ROI_HEADS.SCORE_THRESH_TEST", 0.8] # Optional
-            )
-            layout = model.detect(cv2_image)
-            photos = []
-            drawings = []
-            for element in layout:
-                if element.type in self.image_labels and element.score > self.score_threshold:
-                    mask = numpy.zeros((img.height,img.width), dtype=bool)
-                    mask[int(element.block.y_1):int(element.block.y_2), int(element.block.x_1):int(element.block.x_2)] = True
-                    if self.detectType(cv2_image[int(element.block.y_1):int(element.block.y_2),
-                                                 int(element.block.x_1):int(element.block.x_2)]) == self.PHOTO:
-                        photos.append(mask)
-                    else:
-                        drawings.append(mask)
+        cv2_image = pil_to_cv2image(img)
+        model = layoutparser.Detectron2LayoutModel(
+            config_path = self.config_path, # In model catalog
+            label_map   = self.label_map, # In model`label_map`
+            #extra_config=["MODEL.ROI_HEADS.SCORE_THRESH_TEST", 0.8] # Optional
+        )
+        layout = model.detect(cv2_image)
+        photos = []
+        drawings = []
+        for element in layout:
+            if element.type in self.image_labels and element.score > self.score_threshold:
+                mask = numpy.zeros((img.height,img.width), dtype=bool)
+                mask[int(element.block.y_1):int(element.block.y_2), int(element.block.x_1):int(element.block.x_2)] = True
+                if self.detectType(cv2_image[int(element.block.y_1):int(element.block.y_2),
+                                             int(element.block.x_1):int(element.block.x_2)]) == self.PHOTO:
+                    photos.append(mask)
+                else:
+                    drawings.append(mask)
             
         return (photos, drawings)
     

@@ -5,7 +5,7 @@ Created on 16.02.2021
 '''
 from injector import singleton, inject
 import os
-from PIL import Image, ImageOps
+from PIL import Image, ImageOps, ImageEnhance
 import pytesseract
 import re
 from Asb.ScanConverter.ImageDetection import Detectron2ImageDetectionService
@@ -13,6 +13,12 @@ import numpy
 from skimage.filters.thresholding import threshold_sauvola, threshold_otsu
 import cv2
 import tempfile
+from PIL.ImageOps import autocontrast
+from skimage.filters.rank.generic import enhance_contrast
+from skimage import exposure
+from Asb.ScanConverter.Tools import pil_to_skimage, skimage_to_pil,\
+    pil_to_ndarray
+from skimage.filters.rank._percentile import enhance_contrast_percentile
 
 Image.MAX_IMAGE_PIXELS = None
 
@@ -114,8 +120,6 @@ class FormatConversionService(object):
         
         img, fileinfo = self.change_resolution(img, fileinfo, params)
         img, fileinfo = self.change_mode(img, fileinfo, params)
-        if params.denoise:
-            img = self.denoise(img, params.denoise_threshold, params.connectivity)
         img, fileinfo = self.rotate(img, fileinfo, params)
         return img, fileinfo
 
@@ -123,21 +127,33 @@ class FormatConversionService(object):
         
         return Image.open(fileinfo.filepath)
 
-    def change_mode(self, img: Image, fileinfo: GraphicFileInfo, params: JobDefinition):
+    def change_mode(self, img: Image, fileinfo: GraphicFileInfo, job_definition: JobDefinition):
         
-        if params.modus_change is None:
+        if job_definition.modus_change is None and not job_definition.denoise:
             return img, fileinfo
         
         if img.mode == BLACK_AND_WHITE:
-            return img, fileinfo
+            # The image is already BW, so no mode change may occur,
+            # but perhaps we have to denoise
+            if job_definition.denoise:
+                return self.denoise(img, job_definition.denoise_threshold, job_definition.connectivity), fileinfo
+            else:
+                return img, fileinfo
+        
+        # If we reach this, mode is either color or gray
         
         if img.mode != GRAYSCALE:
+            # The image is some color image, so mode change must be to
+            # gray or bw, this means we need at least convert to gray
             img = ImageOps.grayscale(img)
             fileinfo.rawmode = "L"
         
-        if params.modus_change == BLACK_AND_WHITE:
+        # We now definitely have a gray image
+        
+        if job_definition.modus_change == BLACK_AND_WHITE:
             fileinfo.rawmode = "1"
-            return self.binarize(img, params), fileinfo
+            # Denoising, if requested, is a part of the binarization process
+            return self.binarize(img, job_definition), fileinfo
         else:
             return img, fileinfo
     
@@ -196,14 +212,20 @@ class FormatConversionService(object):
     def binarize(self, img: Image, params: JobDefinition):
         
         if params.binarization_algorithm == FLOYD_STEINBERG:
+            # Denoising does not make sense with floyd steinberg binarization
             return self._binarization_floyd_steinberg(img)
         if params.binarization_algorithm == THRESHOLD:
-            return self._binarization_fixed(img, params.threshold_value)
+            new_image = self._binarization_fixed(img, params.threshold_value)
         if params.binarization_algorithm == SAUVOLA:
-            return self._binarization_sauvola(img)
+            new_image = self._binarization_sauvola(img)
         if params.binarization_algorithm == MIXED:
-            return self._binarization_mixed(img)
-        return img
+            # Denoising occurs within mixed binarization if requested
+            return self._binarization_mixed(img, params)
+        
+        if params.denoise:
+            return self.denoise(new_image, params.denoise_threshold, params.connectivity)
+        else:
+            return new_image
 
     def _binarization_floyd_steinberg(self, img):
         
@@ -228,11 +250,21 @@ class FormatConversionService(object):
         out_array = in_array > mask
         return Image.fromarray(out_array)
 
-    def _binarization_mixed(self, img):
+    def _binarization_mixed(self, img, job_definition: JobDefinition):
         
         text_background = self._binarization_sauvola(img)
-        photo_foreground = self._binarization_floyd_steinberg(img)
-        drawings_foreground = self._binarization_otsu(img)
+        photo_foreground = self._binarization_floyd_steinberg(self._enhance_photo(img))
+        drawings_foreground = self._binarization_otsu(self._enhance_drawing(img))
+        if job_definition.denoise:
+            # Denoising does only make sense on the background and perhaps drawings
+            # TODO: Applying masks should speed up the process
+            text_background = self.denoise(text_background,
+                                          job_definition.denoise_threshold,
+                                          job_definition.connectivity)
+            # Denoising does not work very well even for drawings
+            #drawings_foreground = self.denoise(drawings_foreground,
+            #                              job_definition.denoise_threshold,
+            #                              job_definition.connectivity)
         (photo_masks, drawing_masks) = self.image_detection_service.getImageMasks(img)
         for mask in photo_masks:
             text_background.paste(photo_foreground, None, Image.fromarray(mask)) 
@@ -240,6 +272,16 @@ class FormatConversionService(object):
             text_background.paste(drawings_foreground, None, Image.fromarray(mask)) 
 
         return text_background
+
+    def _enhance_photo(self, img: Image) -> Image:
+        
+        return ImageEnhance.Contrast(img).enhance(1.3)
+    
+    def _enhance_drawing(self, img: Image) -> Image:
+    
+        return img
+        #enhanced_img = ImageEnhance.Contrast(img).enhance(1.3)
+        #return Image.fromarray(exposure.equalize_adapthist(pil_to_skimage(enhanced_img)))
     
     def denoise(self, img: Image, threshold, connectivity):
         
