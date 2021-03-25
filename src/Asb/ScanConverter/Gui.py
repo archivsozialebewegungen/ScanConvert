@@ -44,10 +44,14 @@ class TaskManager():
             
     def run_job(self, job: JobDefinition):
         
-        if job.task == TASK_CONVERT_JPEG:
-            self.convert_to_tif(job)
-        if job.task == TASK_COLLATE_TO_PDF:
-            self.pdf_service.create_pdf_file(job)
+        try:
+            if job.task == TASK_CONVERT_JPEG:
+                self.convert_to_tif(job)
+            if job.task == TASK_COLLATE_TO_PDF:
+                self.pdf_service.create_pdf_file(job)
+        except Exception as e:
+            # TODO: Show error somewhere
+            print(e)
         
     def convert_to_tif(self, job: JobDefinition):
         

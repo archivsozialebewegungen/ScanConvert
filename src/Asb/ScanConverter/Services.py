@@ -17,7 +17,7 @@ from PIL.ImageOps import autocontrast
 from skimage.filters.rank.generic import enhance_contrast
 from skimage import exposure
 from Asb.ScanConverter.Tools import pil_to_skimage, skimage_to_pil,\
-    pil_to_ndarray
+    pil_to_ndarray, pil_to_cv2image, cv2image_to_pil
 from skimage.filters.rank._percentile import enhance_contrast_percentile
 
 Image.MAX_IMAGE_PIXELS = None
@@ -118,6 +118,7 @@ class FormatConversionService(object):
 
     def perform_changes(self, img: Image, fileinfo: GraphicFileInfo, params: JobDefinition):
         
+        #img = self.enhance_contrast(img)
         img, fileinfo = self.change_resolution(img, fileinfo, params)
         img, fileinfo = self.change_mode(img, fileinfo, params)
         img, fileinfo = self.rotate(img, fileinfo, params)
@@ -126,6 +127,22 @@ class FormatConversionService(object):
     def load_image(self, fileinfo: GraphicFileInfo):
         
         return Image.open(fileinfo.filepath)
+    
+    def enhance_contrast(self, img: Image) -> Image:
+        
+        #-----Reading the image-----------------------------------------------------
+        cv2_img = pil_to_cv2image(img)
+        #-----Converting image to LAB Color model----------------------------------- 
+        lab= cv2.cvtColor(cv2_img, cv2.COLOR_BGR2LAB)
+        #-----Splitting the LAB image to different channels-------------------------
+        l, a, b = cv2.split(lab)
+        #-----Applying CLAHE to L-channel-------------------------------------------
+        clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8,8))
+        cl = clahe.apply(l)
+        #-----Merge the CLAHE enhanced L-channel with the a and b channel-----------
+        limg = cv2.merge((cl,a,b))
+        #-----Converting image from LAB Color model to RGB model--------------------
+        return Image.fromarray(cv2.cvtColor(limg, cv2.COLOR_LAB2RGB))
 
     def change_mode(self, img: Image, fileinfo: GraphicFileInfo, job_definition: JobDefinition):
         
@@ -196,9 +213,6 @@ class FormatConversionService(object):
             return img, fileinfo
         
         current_width, current_height = img.size
-        img = Image.open("Image1.png")
-        bin_image = self._binarization_mixed(img)
-        bin_image.save("Image1.bin.png")
 
         new_width = int(current_width * params.resolution_change / current_xres)
         new_height = int(current_height * params.resolution_change / current_yres)

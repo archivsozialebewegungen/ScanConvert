@@ -4,15 +4,9 @@ Created on 13.03.2021
 @author: michael
 '''
 from PIL import Image
-from os import path
-import tempfile
-import os
 import numpy
-import time
 import layoutparser
-from cv2 import cv2
 from Asb.ScanConverter.Tools import pil_to_cv2image
-
     
 class Detectron2ImageDetectionService(object):
     
@@ -71,6 +65,9 @@ class Detectron2ImageDetectionService(object):
     def detectType(self, ndarray):
         
         histogram = numpy.histogram(ndarray, bins=3)
+        print(histogram)
+        if histogram[0][1] == 0:
+            return self.DRAWING
         ratio =  (histogram[0][0] + histogram[0][2]) / histogram[0][1]
         if ratio > 10:
             return self.DRAWING

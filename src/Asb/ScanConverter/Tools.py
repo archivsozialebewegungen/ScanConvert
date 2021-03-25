@@ -33,3 +33,8 @@ def pil_to_cv2image(img: Image):
         img.save(tmpfile)
         cv2_image = cv2.imread(tmpfile)
         return cv2_image[..., ::-1]
+    
+def cv2image_to_pil(cv2_image):
+    
+    img = cv2_image[..., ::-1]
+    return ndarray_to_pil(img[..., ::-1])
