@@ -6,8 +6,8 @@ Created on 13.03.2021
 from PIL import Image
 import numpy
 import layoutparser
-from Asb.ScanConverter.Tools import pil_to_cv2image
-    
+from Asb.ScanConverter.ImageOperations import pil_to_cv2image
+       
 class Detectron2ImageDetectionService(object):
     
     DRAWING = "drawing"
@@ -65,7 +65,7 @@ class Detectron2ImageDetectionService(object):
     def detectType(self, ndarray):
         
         histogram = numpy.histogram(ndarray, bins=3)
-        print(histogram)
+        #print(histogram)
         if histogram[0][1] == 0:
             return self.DRAWING
         ratio =  (histogram[0][0] + histogram[0][2]) / histogram[0][1]
