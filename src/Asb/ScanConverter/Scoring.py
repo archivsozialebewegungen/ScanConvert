@@ -5,6 +5,7 @@ Created on 27.03.2021
 '''
 import re
 
+
 class ScoreResult:
     
     def __init__(self):

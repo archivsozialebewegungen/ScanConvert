@@ -3,18 +3,20 @@ Created on 29.03.2021
 
 @author: michael
 '''
+from os import path
+import re
+import tempfile
 from xml.dom.minidom import parseString, Element
-import pytesseract
-from injector import singleton
+
 from PIL import Image, ImageOps
+import cv2
+from injector import singleton
+from matplotlib import pyplot
 from numpy import ndarray
 import numpy
-import tempfile
-from os import path
-import cv2
-import re
+import pytesseract
 from skimage.filters.thresholding import threshold_otsu, threshold_sauvola
-from matplotlib import pyplot
+
 
 def pil_to_skimage(img: Image) -> ndarray:
 

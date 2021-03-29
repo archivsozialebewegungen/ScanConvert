@@ -3,15 +3,17 @@ Created on 16.02.2021
 
 @author: michael
 '''
-from injector import singleton, inject
 import os
-from PIL import Image, ImageOps, ImageEnhance
-import pytesseract
-from Asb.ScanConverter.ImageDetection import Detectron2ImageDetectionService
-import numpy
 import tempfile
-from Asb.ScanConverter.ImageOperations import AltoPageLayout,\
-    ImageFileOperations, MissingResolutionInfo
+
+from PIL import Image, ImageOps, ImageEnhance
+from injector import singleton, inject
+import numpy
+import pytesseract
+
+from Asb.ScanConverter.ImageDetection import Detectron2ImageDetectionService
+from Asb.ScanConverter.ImageOperations import AltoPageLayout, \
+    ImageFileOperations, MissingResolutionInfo, pil_to_ndarray
 
 
 Image.MAX_IMAGE_PIXELS = None

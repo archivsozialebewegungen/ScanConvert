@@ -4,10 +4,12 @@ Created on 13.03.2021
 @author: michael
 '''
 from PIL import Image
-import numpy
 import layoutparser
+import numpy
+
 from Asb.ScanConverter.ImageOperations import pil_to_cv2image
-       
+
+
 class Detectron2ImageDetectionService(object):
     
     DRAWING = "drawing"
@@ -36,6 +38,7 @@ class Detectron2ImageDetectionService(object):
         self.config_path =  self.models[model]['config']
         self.label_map = self.models[model]['label_map']
         self.image_labels = self.models[model]['image_labels']
+        # We will only consider images that are detected with a score larger than this threshold
         self.score_threshold = 0.7
         self.counter = 0
         

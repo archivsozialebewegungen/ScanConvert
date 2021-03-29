@@ -27,7 +27,7 @@ class OCRServiceTest(unittest.TestCase):
             },
             {"imagefile": "B_Rep_057-01_00297_0005.jpg",
              "textfile": "B_Rep_057-01_00297_0005.txt",
-             "score": 0.42
+             "score": 0.41
              },
             {"imagefile": "B_Rep_057-01_00590_0014.tif",
              "textfile": "B_Rep_057-01_00590_0014.txt",
