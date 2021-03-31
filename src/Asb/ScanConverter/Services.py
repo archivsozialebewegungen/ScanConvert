@@ -15,6 +15,11 @@ from Asb.ScanConverter.ImageDetection import Detectron2ImageDetectionService
 from Asb.ScanConverter.ImageOperations import AltoPageLayout, \
     ImageFileOperations, MissingResolutionInfo, pil_to_ndarray
 
+from reportlab.platypus.paragraph import Paragraph
+from reportlab.platypus.doctemplate import SimpleDocTemplate
+from reportlab.platypus.flowables import Image as PdfImage
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+
 
 Image.MAX_IMAGE_PIXELS = None
 
@@ -362,3 +367,33 @@ class PdfService:
                 return new_filenames
     
             return filenames
+
+    def create_photo_book(self, job: JobDefinition):
+        
+        file = BytesIO()
+        doc = SimpleDocTemplate(file,
+                                pagesize=A4,
+                                leftMargin=margins * cm,
+                                rightMargin=margins * cm,
+                                topMargin=margins * cm,
+                                bottomMargin=margins * cm)
+        doc.build(story)
+        return file.getvalue()
+
+        image = PdfImage(file)
+        if image.imageWidth > available_width or image.imageHeight > available_height:
+            # scale down to 
+            factor = available_width / image.imageWidth
+            height_factor = available_height / image.imageHeight
+            if height_factor < factor:
+                factor = height_factor
+            story.append(PdfImage(file, image.imageWidth*factor, image.imageHeight*factor))
+        else:
+            # calculate size
+            resolution = file_info.resolution
+            if not resolution:
+                resolution = 300.0
+            width_in_inch = image.imageWidth / resolution
+            height_in_inch = image.imageHeight / resolution
+            story.append(PdfImage(file, width_in_inch * inch, height_in_inch * inch))
+        return story

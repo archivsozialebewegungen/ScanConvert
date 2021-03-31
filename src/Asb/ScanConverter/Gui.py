@@ -19,6 +19,7 @@ from Asb.ScanConverter.Services import FormatConversionService, GraphicFileInfo,
 
 TASK_CONVERT_JPEG = "Jpegs nach tif konvertieren"
 TASK_COLLATE_TO_PDF = "Als pdf zusammenfassen"
+TASK_MAKE_PHOTO_BOOK = "Photobuch zusammenstellen"
 
 @singleton
 class TaskManager():
@@ -52,6 +53,8 @@ class TaskManager():
                 self.convert_to_tif(job)
             if job.task == TASK_COLLATE_TO_PDF:
                 self.pdf_service.create_pdf_file(job)
+            if job.task == TASK_MAKE_PHOTO_BOOK:
+                self.pdf_service.create_photo_book(job)
         except Exception as e:
             # TODO: Show error somewhere
             print(e)
