@@ -8,6 +8,7 @@ from Asb.ScanConverter.Services import OCRService, ImageFileOperations
 from PIL import Image
 import os
 from Asb.ScanConverter.Scoring import OCRScorer
+import numpy
 
 
 
@@ -27,15 +28,31 @@ class OCRServiceTest(unittest.TestCase):
             },
             {"imagefile": "B_Rep_057-01_00297_0005.jpg",
              "textfile": "B_Rep_057-01_00297_0005.txt",
-             "score": 0.41
+             "score": 0.43
              },
             {"imagefile": "B_Rep_057-01_00590_0014.tif",
              "textfile": "B_Rep_057-01_00590_0014.txt",
              "score": 0.93
             },
         ]
+
+    def testErosion(self):
+        
+        textfile_name = os.path.join("Images", self.test_list[2]["textfile"])
+        textfile = open(textfile_name, mode='r')
+        expected = textfile.read()
+        textfile.close()
+        img = Image.open(os.path.join("Images", self.test_list[2]["imagefile"]))
+
+        for x in range(1,6):
+            for y in range(1,6):
+                self.ocr_service.image_file_operations.erosion_kernel = numpy.ones((x, y), 'uint8')
+
+                computed = self.ocr_service.extract_text(img)
+                score = self.scorer.scoreResults(expected, computed)
+                print("X: %d. Y: %d. Score: %s" % (x, y, score))
     
-    def testOCR(self):
+    def notestOCR(self):
         
         for params in self.test_list:
             textfile_name = os.path.join("Images", params["textfile"])

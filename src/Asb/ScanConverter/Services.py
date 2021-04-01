@@ -264,6 +264,7 @@ class OCRService():
     def __init__(self, image_file_operations: ImageFileOperations):
         
         self.image_file_operations = image_file_operations
+        self.denoise_threshold = 1
 
     def extract_text(self, img: Image, language='deu'):
         
@@ -271,8 +272,29 @@ class OCRService():
             img = self.image_file_operations.enhance_contrast(img)
         img = img.convert('L')
         img = self.image_file_operations.binarization_sauvola(img)
-        img = self.image_file_operations.denoise(img, 30, 8)
-
+        img = self.image_file_operations.denoise(img, self.denoise_threshold)
+        img = self.image_file_operations.apply_erosion(img)
+        #self.image_file_operations.show_image(img)
+        #last_denoise_threshold = 0
+        #current_denoise_threshold = 1
+        #iterations = 0
+        #for threshold in range(1,60):
+        #    print("Threshold: %d" % threshold)
+        #    denoised = self.image_file_operations.denoise(img, threshold)
+        #    self.image_file_operations.needs_denoise(denoised)
+            
+        #while last_denoise_threshold != current_denoise_threshold:
+        #    iterations += 1
+        #    print("Denoise iteration %d.." % iterations)
+        #    denoised = self.image_file_operations.denoise(img, current_denoise_threshold)
+        #    if self.image_file_operations.needs_denoise(denoised):
+        #        last_denoise_threshold = current_denoise_threshold
+        #        current_denoise_threshold = 2 * current_denoise_threshold
+        #    else:
+        #        new_last = current_denoise_threshold
+        #        current_denoise_threshold = current_denoise_threshold - int((current_denoise_threshold - last_denoise_threshold) / 2)
+        #        last_denoise_threshold = new_last
+        #print("Final denoise threshold: %d" % last_denoise_threshold)
         return pytesseract.image_to_string(img, lang=language)
     
     def needs_more_contrast(self, img: Image) -> bool:

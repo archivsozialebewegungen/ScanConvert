@@ -12,7 +12,7 @@ from PIL import Image, ImageOps
 import cv2
 from injector import singleton
 from matplotlib import pyplot
-from numpy import ndarray
+from numpy import ndarray, median
 import numpy
 import pytesseract
 from skimage.filters.thresholding import threshold_otsu, threshold_sauvola
@@ -51,6 +51,47 @@ class MissingResolutionInfo(Exception):
     
     pass
 
+class StringObject:
+    
+    dotted_characters = {'i': 2, 'ä': 3, 'ö': 3, 'ü': 3, 'Ä': 3, 'Ö': 3, 'Ü': 3, '.': 1, '!': 2, ':': 2, ';': 2}
+
+    def __init__(self, stringElement: Element):
+        
+        self.stringElement = stringElement
+    
+    def is_string_with_dots(self):
+        
+        # Avoid strings with accented characters etc.
+        empty_string = re.sub("[a-zA-ZäöüÄÖÜ.!:;]*", '', self.get_text())
+        if len(empty_string) != 0:
+            return False
+        without_dotted = re.sub("[iäöüÄÖÜ.!:;]", '', self.get_text())
+        if self.get_text() != without_dotted:
+            return True
+        return False
+    
+    def get_number_of_shapes(self):
+        
+        shapes = 0
+        for character in self.get_text():
+            if character in self.dotted_characters:
+                shapes += self.dotted_characters[character]
+            else:
+                shapes += 1
+        return shapes
+        
+    def get_text(self):
+        
+        return self.stringElement.getAttribute("CONTENT")
+    
+    def get_bounding_box(self):
+        
+        x1 = int(self.stringElement.getAttribute("HPOS"))
+        y1 = int(self.stringElement.getAttribute("VPOS"))
+        x2 = x1 + int(self.stringElement.getAttribute("WIDTH"))
+        y2 = y1 + int(self.stringElement.getAttribute("HEIGHT"))
+        return x1, y1, x2, y2
+
 class AltoPageLayout:
     
     def __init__(self, img):
@@ -63,6 +104,13 @@ class AltoPageLayout:
         self.dom.writexml(file, indent="   ")
         file.close()
     
+    def getAllStrings(self) -> [StringObject]:
+
+        strings = []
+        for str in self.dom.getElementsByTagName("String"):
+            strings.append(StringObject(str))
+        return strings
+        
     def get_big_text_block_coordinates(self):
         
         block = self.get_big_text_block()
@@ -99,6 +147,11 @@ class AltoPageLayout:
 @singleton
 class ImageFileOperations:
     
+    def __init__(self):
+        
+        self.dilation_kernel = numpy.ones((1, 2), 'uint8')
+        self.erosion_kernel = numpy.ones((1, 2), 'uint8')
+    
     def enhance_contrast(self, img: Image) -> Image:
         
         #-----Reading the image-----------------------------------------------------
@@ -115,6 +168,22 @@ class ImageFileOperations:
         #-----Converting image from LAB Color model to RGB model--------------------
         return cv2image_to_pil(cv2.cvtColor(limg, cv2.COLOR_LAB2BGR))
     
+    def apply_dilation(self, img: Image):
+        
+        cv2_img = pil_to_cv2image(img)
+        
+        delated = cv2.dilate(cv2_img, self.delation_kernel, iterations=1)
+        
+        return cv2image_to_pil(delated)
+    
+    def apply_erosion(self, img: Image):
+        
+        cv2_img = pil_to_cv2image(img)
+        
+        eroded = cv2.erode(cv2_img, self.erosion_kernel, iterations=1)
+        
+        return cv2image_to_pil(eroded)
+        
     def detect_rotation_angle(self, img: Image):
         
         info = pytesseract.image_to_osd(img).replace("\n", " ")
@@ -163,44 +232,96 @@ class ImageFileOperations:
 
     def binarization_fixed(self, img, threshold=127):
 
-        return img.point(lambda v: 1 if v > threshold else 0, "1")
+        return self.convert_to_gray(img).point(lambda v: 1 if v > threshold else 0, "1")
 
     def binarization_otsu(self, img):
 
-        in_array = numpy.array(img)
+        in_array = numpy.array(self.convert_to_gray(img))
         mask = threshold_otsu(in_array)
         out_array = in_array > mask
         return Image.fromarray(out_array)
     
     def binarization_sauvola(self, img, window_size=41):
 
-        in_array = numpy.array(img)
+        in_array = numpy.array(self.convert_to_gray(img))
         mask = threshold_sauvola(in_array, window_size=window_size)
         out_array = in_array > mask
         return Image.fromarray(out_array)
-
-    def denoise(self, img: Image, threshold, connectivity):
+    
+    def convert_to_gray(self, img: Image):
         
-        if img.mode != "1":
+        if img.mode == "1" or img.mode == "L":
             return img
+        
+        return img.convert("L")
+
+    def print_shape_information(self, img: Image):
+        
+        no_of_components, labels, sizes = self.connected_components_with_stats(img)
+        print("Number of components: %d." % (no_of_components - 1))
+        print("Average shape size: %d." % numpy.average(sizes[1:]))
+        print("Standard deviation: %f." % numpy.std(sizes[1:]))
+        print("Median shape size: %d." % numpy.median(sizes[1:]))
+        print("Median / Average: %f." % (numpy.median(sizes[1:]) / numpy.average(sizes[1:])))
+        num_bins = 256
+        n, bins, patches = pyplot.hist(sizes[1:], num_bins, facecolor='blue', alpha=0.5)
+        pyplot.show()
+    
+    def needs_denoise(self, img: Image):
+
+        no_of_components, labels, sizes = self.connected_components_with_stats(img)
+        quotient = (numpy.median(sizes[1:]) / numpy.average(sizes[1:]))
+        print("Quotient: %f" % quotient)
+        return  quotient < 0.8
+        
+    def connected_components_with_stats(self, img: Image):
+
+        if img.mode != "1":
+            raise Exception("Please call the connected_components method only on binary images!")
 
         inverted = ImageOps.invert(img.convert("RGB"))
-        
         ndarray = numpy.array(inverted.convert("1"), dtype=numpy.uint8)
-
-        #print("Connectivity is %d" % connectivity)
-        no_of_components, labels, stats, centroids = cv2.connectedComponentsWithStats(ndarray, connectivity=connectivity)
+        no_of_components, labels, stats, centroids = cv2.connectedComponentsWithStats(ndarray, connectivity=8)
         sizes = stats[:, cv2.CC_STAT_AREA];
-        #print("Found %d components" % no_of_components)
+        
+        # Leave out background 
+        return no_of_components, labels, sizes
 
-        bw_new = numpy.ones((ndarray.shape), dtype=numpy.bool)
-        big_components = 0
+    def denoise(self, img: Image, threshold):
+        
+        no_of_components, labels, sizes = self.connected_components_with_stats(img)
+
+        bw_new = numpy.ones((labels.shape), dtype=numpy.bool)
         for shape_identifier in range(1, no_of_components):
             if sizes[shape_identifier] > threshold:
-                big_components += 1
                 bw_new[labels == shape_identifier] = 0
-        #print("Removed %d components" % (no_of_components - big_components))
         return Image.fromarray(bw_new)
+    
+    def determine_dot_size(self, img: Image):
+        
+        ndarray = pil_to_ndarray(img)
+        
+        bin_image = self.binarization_otsu(img)
+        alto_layout = AltoPageLayout(bin_image)
+        
+        dotsizes = []
+        for text_string in alto_layout.getAllStrings():
+            if text_string.is_string_with_dots():
+                x1, y1, x2, y2 = text_string.get_bounding_box()
+                expected_no_of_shapes = text_string.get_number_of_shapes()
+                no_of_components, labels, sizes = self.connectedComponentsWithStats(ndarray_to_pil(ndarray[y1:y2, x1:x2]))
+                size_values = []
+                for shape_identifier in range(1, no_of_components):
+                    size_values.append(sizes[shape_identifier])
+                size_values = numpy.sort(size_values)
+                if len(size_values) < expected_no_of_shapes:
+                    continue
+                dotsizes.append(size_values[-1 * expected_no_of_shapes])
+        print("Dotsize: %f" % numpy.median(dotsizes))
+                
+            
+        return 13
+        
 
     def show_image(self, img: Image):
 
