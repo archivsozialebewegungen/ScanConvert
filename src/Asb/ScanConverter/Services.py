@@ -444,9 +444,13 @@ class OCRService():
             img = self.image_file_operations.enhance_contrast(img)
         img = img.convert('L')
         img = self.image_file_operations.binarization_sauvola(img)
-        img = self.image_file_operations.denoise(img, 30, 8)
+        self.image_file_operations.show_image(img)
 
-        return pytesseract.image_to_string(img, lang=language)
+        return self.post_process_text(pytesseract.image_to_string(img, lang=language))
+    
+    def post_process_text(self, text: str) -> str:
+        
+        return re.sub("(?<=\w)-\s+", '', text, flags=re.DOTALL)
     
     def needs_more_contrast(self, img: Image) -> bool:
         '''
@@ -461,17 +465,15 @@ class OCRService():
         depending of the size of the text area and define a threshold
         for the standard deviation.
         '''
-        gray_img = img.convert(mode='L')
-        bin_img = self.image_file_operations.binarization_sauvola(gray_img)
-        page_layout = AltoPageLayout(bin_img)
         
+        page_layout = AltoPageLayout(img)
         coordinates = page_layout.get_big_text_block_coordinates()
-        textblock = gray_img.crop(coordinates)
+        
+        textblock = img.convert(mode='L').crop(coordinates)
         
         histogram = numpy.histogram(pil_to_ndarray(textblock), bins=256)
         mean = numpy.mean(histogram[0][:48])
         standard_deviation = numpy.std(histogram[0][:48])
-
         return standard_deviation / mean < 2
 
 @singleton
