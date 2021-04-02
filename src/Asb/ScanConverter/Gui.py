@@ -4,15 +4,18 @@ Created on 13.02.2021
 @author: michael
 '''
 
-from PyQt5.QtWidgets import QLabel, QApplication, QPushButton, QTableWidget, QVBoxLayout, QHBoxLayout, QWidget, QFileDialog, QTableWidgetItem, QAbstractItemView,\
-    QComboBox, QRadioButton, QButtonGroup, QGroupBox, QSlider, QCheckBox
 import sys
 import threading
-from injector import Injector, inject, singleton
-from Asb.ScanConverter.Services import FormatConversionService, GraphicFileInfo,\
-    JobDefinition, GRAYSCALE, BLACK_AND_WHITE, FLOYD_STEINBERG, THRESHOLD,\
-    SAUVOLA, MIXED, PdfService
+
 from PyQt5.QtCore import Qt
+from PyQt5.QtWidgets import QLabel, QApplication, QPushButton, QTableWidget, QVBoxLayout, QHBoxLayout, QWidget, QFileDialog, QTableWidgetItem, QAbstractItemView, \
+    QComboBox, QRadioButton, QButtonGroup, QGroupBox, QSlider, QCheckBox
+from injector import Injector, inject, singleton
+
+from Asb.ScanConverter.Services import FormatConversionService, GraphicFileInfo, \
+    JobDefinition, GRAYSCALE, BLACK_AND_WHITE, FLOYD_STEINBERG, THRESHOLD, \
+    SAUVOLA, MIXED, PdfService
+
 
 TASK_CONVERT_JPEG = "Jpegs nach tif konvertieren"
 TASK_COLLATE_TO_PDF = "Als pdf zusammenfassen"

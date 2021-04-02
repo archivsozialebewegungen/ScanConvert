@@ -5,23 +5,28 @@ Created on 27.03.2021
 '''
 import re
 
+
 class ScoreResult:
     
-    def __init__(self):
+    def __init__(self, verbose=False):
         
         self.found = {}
         self.not_found = {}
         self.false_found = {}
+        self.verbose=verbose
     
     def __str__(self):
         
         display = "Score is %f" % self.score_value
-        for word in self.found.keys():
-            display += "\nFound: %s (%d times)" % (word, self.found[word])
-        for word in self.not_found.keys():
-            display += "\nNot found: %s (%d times missing)" % (word, self.not_found[word])
-        for word in self.false_found.keys():
-            display += "\nFound instead: %s (%d times)" % (word, self.false_found[word])
+        if self.verbose:
+            for word in self.found.keys():
+                display += "\nFound: %s (%d times)" % (word, self.found[word])
+            for word in self.not_found.keys():
+                display += "\nNot found: %s (%d times missing)" % (word, self.not_found[word])
+            for word in self.false_found.keys():
+                display += "\nFound instead: %s (%d times)" % (word, self.false_found[word])
+        else:
+            display += ". Words found: %d. Words not found: %d." % (len(self.found), len(self.not_found))
         return display
 
     def _get_score_value(self):

@@ -15,7 +15,7 @@ class ScorerTest(unittest.TestCase):
         expected = "Dies ist ein Text, der auch auch Kommata und Ümlaute enthält"
         computed = "Dles ist ein Text, der auch Konnnata und Ümlaufe enthält"
         scorer = OCRScorer()
-        self.assertEqual(7/11, scorer.scoreResults(expected, computed))
+        self.assertEqual(7/11, scorer.scoreResults(expected, computed).score_value)
 
 if __name__ == "__main__":
     #import sys;sys.argv = ['', 'Test.testName']
