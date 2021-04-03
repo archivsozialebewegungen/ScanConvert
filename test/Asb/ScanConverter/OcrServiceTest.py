@@ -3,13 +3,13 @@ Created on 27.03.2021
 
 @author: michael
 '''
-import unittest
-from Asb.ScanConverter.Services import OCRService, ImageFileOperations
-from PIL import Image
 import os
-from Asb.ScanConverter.Scoring import OCRScorer
-import numpy
+import unittest
 
+from PIL import Image
+
+from Asb.ScanConverter.Scoring import OCRScorer
+from Asb.ScanConverter.Services import OCRService, ImageFileOperations
 
 
 class OCRServiceTest(unittest.TestCase):
@@ -28,15 +28,15 @@ class OCRServiceTest(unittest.TestCase):
             },
             {"imagefile": "B_Rep_057-01_00297_0005.jpg",
              "textfile": "B_Rep_057-01_00297_0005.txt",
-             "score": 0.42
+             "score": 0.33
              },
             {"imagefile": "B_Rep_057-01_00590_0014.tif",
              "textfile": "B_Rep_057-01_00590_0014.txt",
-             "score": 0.93
+             "score": 0.86
             },
             {"imagefile": "RoterStern2.jpg",
              "textfile": "RoterStern2.txt",
-             "score": 0.93
+             "score": 0.52
             },
         ]
 

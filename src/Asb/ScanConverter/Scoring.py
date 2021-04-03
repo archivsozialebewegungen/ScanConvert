@@ -33,10 +33,10 @@ class ScoreResult:
         
         sum_not_found = 0
         for word in self.not_found:
-            sum_not_found += self.not_found[word]
+            sum_not_found += self.not_found[word] * len(word)
         sum_found = 0
         for word in self.found:
-            sum_found += self.found[word]
+            sum_found += self.found[word] * len(word)
         
         return sum_found / (sum_found + sum_not_found)
         
@@ -49,16 +49,9 @@ class OCRScorer:
         expected_word_list = self._create_word_list(expected)
         computed_word_list = self._create_word_list(computed)
         
-        found = 0
-        expected = 0
         score = ScoreResult()
         for word in expected_word_list.keys():
-            expected += expected_word_list[word]
             if word in computed_word_list:
-                if computed_word_list[word] > expected_word_list[word]:
-                    print("Found more instances (%d instead of %d) of »%s« than expected!" % (computed_word_list[word],
-                                                                                            expected_word_list[word],
-                                                                                            word))
                 if computed_word_list[word] < expected_word_list[word]:
                     score.not_found[word] = expected_word_list[word] - computed_word_list[word]
                     score.found[word] = computed_word_list[word]
@@ -78,15 +71,15 @@ class OCRScorer:
         
     def _create_word_list(self, text):
         
-        list = {}
+        wordlist = {}
         for word in re.split('\W+', text):
             if len(word) == 0:
                 continue
-            if word in list:
-                list[word] += 1
+            if word in wordlist:
+                wordlist[word] += 1
             else:
-                list[word] = 1
-        return list
+                wordlist[word] = 1
+        return wordlist
         
         
         

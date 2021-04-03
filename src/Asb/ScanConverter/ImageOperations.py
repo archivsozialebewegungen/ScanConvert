@@ -107,8 +107,8 @@ class AltoPageLayout:
     def getAllStrings(self) -> [StringObject]:
 
         strings = []
-        for str in self.dom.getElementsByTagName("String"):
-            strings.append(StringObject(str))
+        for string in self.dom.getElementsByTagName("String"):
+            strings.append(StringObject(string))
         return strings
         
     def get_big_text_block_coordinates(self):
@@ -124,6 +124,13 @@ class AltoPageLayout:
         y2 = y1 + int(height.value)
         
         return x1, y1, x2, y2
+    
+    def get_median_text_height(self):
+        
+        heights = []
+        for string in self.dom.getElementsByTagName("String"):
+            heights.append(int(string.getAttribute("HEIGHT")))
+        return numpy.median(heights)
         
     def get_layout(self):
         
@@ -149,8 +156,8 @@ class ImageFileOperations:
     
     def __init__(self):
         
-        self.dilation_kernel = numpy.ones((1, 2), 'uint8')
-        self.erosion_kernel = numpy.ones((1, 2), 'uint8')
+        self.dilation_kernel = numpy.ones((2, 2), 'uint8')
+        self.erosion_kernel = numpy.ones((2, 2), 'uint8')
     
     def enhance_contrast(self, img: Image) -> Image:
         
@@ -172,9 +179,9 @@ class ImageFileOperations:
         
         cv2_img = pil_to_cv2image(img)
         
-        delated = cv2.dilate(cv2_img, self.delation_kernel, iterations=1)
+        dilated = cv2.dilate(cv2_img, self.dilation_kernel, iterations=1)
         
-        return cv2image_to_pil(delated)
+        return cv2image_to_pil(dilated)
     
     def apply_erosion(self, img: Image):
         
@@ -200,10 +207,16 @@ class ImageFileOperations:
     def change_resolution(self, img: Image, new_resolution):
         
         if not 'dpi' in img.info:
+            for key in img.info.keys():
+                print(img.info[key])
+            return img
             raise MissingResolutionInfo()
         
         current_xres, current_yres = img.info['dpi']
         if current_xres == 1 or current_yres == 1:
+            for key in img.info.keys():
+                print(img.info[key])
+            return img
             raise MissingResolutionInfo()
         
         if current_xres == new_resolution and current_yres == new_resolution:
@@ -267,13 +280,6 @@ class ImageFileOperations:
         n, bins, patches = pyplot.hist(sizes[1:], num_bins, facecolor='blue', alpha=0.5)
         pyplot.show()
     
-    def needs_denoise(self, img: Image):
-
-        no_of_components, labels, sizes = self.connected_components_with_stats(img)
-        quotient = (numpy.median(sizes[1:]) / numpy.average(sizes[1:]))
-        print("Quotient: %f" % quotient)
-        return  quotient < 0.8
-        
     def connected_components_with_stats(self, img: Image):
 
         if img.mode != "1":
@@ -287,9 +293,22 @@ class ImageFileOperations:
         # Leave out background 
         return no_of_components, labels, sizes
 
-    def denoise(self, img: Image, threshold):
+    def denoise(self, img: Image):
         
         no_of_components, labels, sizes = self.connected_components_with_stats(img)
+
+        small_shapes = 0
+        for shape_identifier in range(1, no_of_components):
+            if sizes[shape_identifier] < 4:
+                small_shapes += 1
+        
+        if small_shapes / (no_of_components - 1) < 0.1:
+            #print("No need to denoise")
+            return img
+        
+        textheight = AltoPageLayout(img).get_median_text_height()
+        shape_diameter = textheight / 8
+        threshold = int(shape_diameter * shape_diameter)
 
         bw_new = numpy.ones((labels.shape), dtype=numpy.bool)
         for shape_identifier in range(1, no_of_components):

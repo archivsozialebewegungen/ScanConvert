@@ -269,11 +269,14 @@ class OCRService():
 
     def extract_text(self, img: Image, language='deu'):
         
+        #img = self.image_file_operations.change_resolution(img, 300)
+        
         if self.needs_more_contrast(img):
             img = self.image_file_operations.enhance_contrast(img)
+            img = self.image_file_operations.apply_dilation(img)
         img = img.convert('L')
         img = self.image_file_operations.binarization_sauvola(img)
-        self.image_file_operations.show_image(img)
+        img = self.image_file_operations.denoise(img)
 
         return self.post_process_text(pytesseract.image_to_string(img, lang=language))
     
