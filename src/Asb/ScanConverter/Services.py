@@ -8,13 +8,9 @@ import tempfile
 
 from PIL import Image, ImageOps, ImageEnhance
 from injector import singleton, inject
-import numpy
-import pytesseract
 
 from Asb.ScanConverter.ImageDetection import Detectron2ImageDetectionService
-from Asb.ScanConverter.ImageOperations import AltoPageLayout, \
-    ImageFileOperations, MissingResolutionInfo, pil_to_ndarray
-import re
+from Asb.ScanConverter.ImageOperations import ImageFileOperations, MissingResolutionInfo
 
 
 Image.MAX_IMAGE_PIXELS = None
@@ -99,8 +95,6 @@ class JobDefinition:
         self.rotation = 0
         self.autorotation = False
         self.denoise = False
-        self.denoise_threshold = 12
-        self.connectivity = 4
 
 @singleton
 class FormatConversionService(object):
@@ -136,7 +130,7 @@ class FormatConversionService(object):
             # The image is already BW, so no mode change may occur,
             # but perhaps we have to denoise
             if job_definition.denoise:
-                return self.image_file_operations.denoise(img, job_definition.denoise_threshold, job_definition.connectivity), fileinfo
+                return self.image_file_operations.denoise(img), fileinfo
             else:
                 return img, fileinfo
         
@@ -199,30 +193,23 @@ class FormatConversionService(object):
             return self._binarization_mixed(img, params)
         
         if params.denoise:
-            return self.image_file_operations.denoise(new_image, params.denoise_threshold, params.connectivity)
+            return self.image_file_operations.denoise(new_image)
         else:
             return new_image
 
     def _binarization_mixed(self, img, job_definition: JobDefinition):
         
-        text_background = self.image_file_operations.binarization_sauvola(img)
-        photo_foreground = self.image_file_operations.binarization_floyd_steinberg(self._enhance_photo(img))
-        drawings_foreground = self.image_file_operations.binarization_otsu(self._enhance_drawing(img))
+        meta_img = self.image_detection_service.get_illustration_meta_image(img)
+        text_background = meta_img.get_img_without_illustrations()
+        text_background = self.image_file_operations.isolate_text(text_background)
+        text_background = self.image_file_operations.binarization_sauvola(text_background)
         if job_definition.denoise:
-            # Denoising does only make sense on the background and perhaps drawings
-            # TODO: Applying masks should speed up the process
-            text_background = self.image_file_operations.denoise(text_background,
-                                          job_definition.denoise_threshold,
-                                          job_definition.connectivity)
-            # Denoising does not work very well even for drawings
-            #drawings_foreground = self.image_file_operations.denoise(drawings_foreground,
-            #                              job_definition.denoise_threshold,
-            #                              job_definition.connectivity)
-        (photo_masks, drawing_masks) = self.image_detection_service.getImageMasks(img)
-        for mask in photo_masks:
-            text_background.paste(photo_foreground, None, Image.fromarray(mask)) 
-        for mask in drawing_masks:
-            text_background.paste(drawings_foreground, None, Image.fromarray(mask)) 
+            text_background = self.image_file_operations.denoise(text_background)
+            
+        for (x1, y1, photo) in meta_img.get_photos():
+            text_background.paste(photo, (x1, y1))
+        for (x1, y1, drawing) in meta_img.get_drawings():
+            text_background.paste(self.image_file_operations.binarization_otsu(drawing), (x1, y1))
 
         return text_background
 
@@ -258,56 +245,6 @@ class FormatConversionService(object):
                 images[i-1].save(new_filepath, compression="tiff_lzw", dpi=fileinfo.info['dpi'])
 
         
-@singleton
-class OCRService():
-
-    @inject
-    def __init__(self, image_file_operations: ImageFileOperations):
-        
-        self.image_file_operations = image_file_operations
-        self.denoise_threshold = 1
-
-    def extract_text(self, img: Image, language='deu'):
-        
-        #img = self.image_file_operations.change_resolution(img, 300)
-        
-        if self.needs_more_contrast(img):
-            img = self.image_file_operations.enhance_contrast(img)
-            img = self.image_file_operations.apply_dilation(img)
-        img = img.convert('L')
-        img = self.image_file_operations.binarization_sauvola(img)
-        img = self.image_file_operations.denoise(img)
-
-        return self.post_process_text(pytesseract.image_to_string(img, lang=language))
-    
-    def post_process_text(self, text: str) -> str:
-        
-        return re.sub("(?<=\w)-\s+", '', text, flags=re.DOTALL)
-    
-    def needs_more_contrast(self, img: Image) -> bool:
-        '''
-        This is quite experimental. First we look for a text area
-        in the image that has sufficient size.
-        Then we calculate the mean and the standard deviation of the
-        darkest pixel value (0-48) and put them into relation.
-        If this value is smaller than 2 we assume that the values
-        are spread out more and we need more contrast.
-        
-        Another possibility would be to normalize the histogram
-        depending of the size of the text area and define a threshold
-        for the standard deviation.
-        '''
-        
-        page_layout = AltoPageLayout(img)
-        coordinates = page_layout.get_big_text_block_coordinates()
-        
-        textblock = img.convert(mode='L').crop(coordinates)
-        
-        histogram = numpy.histogram(pil_to_ndarray(textblock), bins=256)
-        mean = numpy.mean(histogram[0][:48])
-        standard_deviation = numpy.std(histogram[0][:48])
-        return standard_deviation / mean < 2
-
 @singleton
 class PdfService:
     

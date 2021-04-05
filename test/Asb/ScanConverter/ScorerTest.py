@@ -4,7 +4,7 @@ Created on 27.03.2021
 @author: michael
 '''
 import unittest
-from Asb.ScanConverter.Scoring import OCRScorer
+from Asb.ScanConverter.Ocr.Scoring import OCRScorer
 
 
 class ScorerTest(unittest.TestCase):
@@ -15,7 +15,15 @@ class ScorerTest(unittest.TestCase):
         expected = "Dies ist ein Text, der auch auch Kommata und Ümlaute enthält"
         computed = "Dles ist ein Text, der auch Konnnata und Ümlaufe enthält"
         scorer = OCRScorer()
-        self.assertEqual(7/11, scorer.scoreResults(expected, computed).score_value)
+        score = scorer.scoreResults(expected, computed)
+        self.assertEqual(4, len(score.not_found_words))
+        self.assertEqual(7, len(score.found_words))
+        self.assertEqual(3, len(score.false_found_words))
+        
+        sum_not_found = len("Dies") + len("auch") + len("Kommata") + len("Ümlaute") 
+        sum_found = len("ist") + len("ein") + len("Text") + len("der") + len("auch") + len("und") + len("enthält") 
+        
+        self.assertEqual(sum_found / (sum_found + sum_not_found), score.score_value)
 
 if __name__ == "__main__":
     #import sys;sys.argv = ['', 'Test.testName']

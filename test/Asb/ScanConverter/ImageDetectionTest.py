@@ -7,8 +7,10 @@ from PIL import Image
 import unittest
 import numpy
 import os.path
-from Asb.ScanConverter.ImageDetection import Detectron2ImageDetectionService
+from Asb.ScanConverter.ImageDetection import Detectron2ImageDetectionService,\
+    IllustrationMetaImage
 from Asb.ScanConverter.Services import ImageFileOperations
+from layoutparser.models.catalog import CONFIG_CATALOG
 
 
 class ImageDetectionTest(unittest.TestCase):
@@ -34,17 +36,20 @@ class ImageDetectionTest(unittest.TestCase):
 
     def testDetectron2ImageDetection(self):
 
-        for image in range(0, len(self.img)):
-            # for model in ('PubLayNet3',):
-            for model in (Detectron2ImageDetectionService.models.keys()):
-                service = Detectron2ImageDetectionService(model=model)
-                masks_by_type = service.getImageMasks(self.img[image])
-                f_score = self.calculate_fscore(image, masks_by_type)
-                print("F-Score for image %d and model %s: %f" % (image, model, f_score))
+        for image_index in range(0, len(self.img)):
+            for training_set in CONFIG_CATALOG.keys():
+                for model in CONFIG_CATALOG[training_set].keys():
+                    service = Detectron2ImageDetectionService(training_set=training_set, model=model)
+                    meta_image = service.get_illustration_meta_image(self.img[image_index])
+                    if meta_image.number_of_illustrations() == 0:
+                        print("No illustrations found in image %d with training set %s and model %s." % (image_index, training_set, model))
+                        continue
+                    f_score = self.calculate_fscore(image_index, meta_image)
+                    print("F-Score for image %d, training set %s and model %s: %f." % (image_index, training_set, model, f_score))
 
-    def calculate_fscore(self, image, masks_by_type):
+    def calculate_fscore(self, image_index: int, meta_img: IllustrationMetaImage):
 
-        bw_img = self.image_file_operations.binarization_sauvola(self.img[image])
+        bw_img = self.image_file_operations.binarization_sauvola(self.img[image_index])
         
         # Wir entfernen alles ausser den Bildern und wenden
         # dann die berechneten Masken an. Was dann noch übrig
@@ -52,12 +57,11 @@ class ImageDetectionTest(unittest.TestCase):
         # false negatives
         
         image_without_text = numpy.array(bw_img, dtype=numpy.bool)
-        image_without_text[numpy.invert(self.correct_mask[image])] = 1
+        image_without_text[numpy.invert(self.correct_mask[image_index])] = 1
         histogram = numpy.histogram(image_without_text, bins=2)
         all_positives = histogram[0][0]
-        for type_array in masks_by_type:
-            for mask in type_array:
-                image_without_text[mask] = 1
+        
+        image_without_text[numpy.array(meta_img.get_illustration_mask(), dtype=numpy.bool)] = 1
         histogram = numpy.histogram(image_without_text, bins=2)
         false_negatives = histogram[0][0]
         found_positives = all_positives - false_negatives
@@ -69,12 +73,10 @@ class ImageDetectionTest(unittest.TestCase):
         # entfernt wurden, das sind die false_positives 
         
         image_without_pictures = numpy.array(bw_img, dtype=numpy.bool)
-        image_without_pictures[self.correct_mask[image]] = 1
+        image_without_pictures[self.correct_mask[image_index]] = 1
         histogram = numpy.histogram(image_without_pictures, bins=2)
         pixels_remaining = histogram[0][0]
-        for type_array in masks_by_type:
-            for mask in type_array:
-                image_without_pictures[mask] = 1
+        image_without_pictures[numpy.array(meta_img.get_illustration_mask(), dtype=numpy.bool)] = 1
         histogram = numpy.histogram(image_without_pictures, bins=2)
         false_positives = pixels_remaining - histogram[0][0]
         precision = found_positives / (found_positives + false_positives)

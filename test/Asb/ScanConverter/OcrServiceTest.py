@@ -9,7 +9,9 @@ import unittest
 from PIL import Image
 
 from Asb.ScanConverter.Scoring import OCRScorer
-from Asb.ScanConverter.Services import OCRService, ImageFileOperations
+from Asb.ScanConverter.Ocr.OCR import OcrRunner, OcrPreprocessor,\
+    OcrPostprocessor
+from Asb.ScanConverter.ImageOperations import ImageFileOperations
 
 
 class OCRServiceTest(unittest.TestCase):
@@ -18,7 +20,8 @@ class OCRServiceTest(unittest.TestCase):
 
     def setUp(self):
         
-        self.ocr_service = OCRService(ImageFileOperations())
+        self.postprocessor = OcrPostprocessor()
+        self.ocr_service = OcrRunner(OcrPreprocessor(ImageFileOperations()), self.postprocessor)
         self.scorer = OCRScorer()
 
     test_list = [
@@ -28,17 +31,29 @@ class OCRServiceTest(unittest.TestCase):
             },
             {"imagefile": "B_Rep_057-01_00297_0005.jpg",
              "textfile": "B_Rep_057-01_00297_0005.txt",
-             "score": 0.33
+             "score": 0.28
              },
             {"imagefile": "B_Rep_057-01_00590_0014.tif",
              "textfile": "B_Rep_057-01_00590_0014.txt",
-             "score": 0.86
+             "score": 0.65
             },
             {"imagefile": "RoterStern2.jpg",
              "textfile": "RoterStern2.txt",
-             "score": 0.52
+             "score": 0.48
             },
         ]
+
+    def test_remove_hyphenation(self):
+        
+        input = """Immer im Win-
+        ter, wenn es schneit, kom-
+        men - wenn niemand es sieht -
+        Gnome aus dem Wald."""
+        
+        expected = """Immer im Winter, wenn es schneit, kommen - wenn niemand es sieht -
+        Gnome aus dem Wald."""
+
+        self.assertEqual(self.postprocessor.remove_hyphenation(input), expected)
 
     def testOCR(self):
         
@@ -53,7 +68,7 @@ class OCRServiceTest(unittest.TestCase):
                     expected = "Empty"
 
                 img = Image.open(os.path.join("Images", params["imagefile"]))
-                computed = self.ocr_service.extract_text(img)
+                computed = self.ocr_service.get_text(img)
                 if not os.path.exists(textfile_name):
                     textfile = open(textfile_name,mode='w')
                     textfile.write(computed)

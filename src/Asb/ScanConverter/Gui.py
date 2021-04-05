@@ -155,8 +155,8 @@ class Window(QWidget):
         sort_box = self._get_sort_box()
         right_column.addWidget(sort_box)
 
-        denoise_box = self._get_denoise_box()
-        right_column.addWidget(denoise_box)
+        denoise_widget = self._get_denoise_widget()
+        right_column.addWidget(denoise_widget)
 
         run_button = QPushButton("Aufgabe ausführen")
         run_button.clicked.connect(self.add_task)
@@ -281,56 +281,10 @@ class Window(QWidget):
         else:
             self.threshold_slider.setDisabled(True)
 
-    def _get_denoise_box(self):
-        
-        denoise_box = QGroupBox("Flecken entfernen")
-        denoise_layout = QVBoxLayout()
+    def _get_denoise_widget(self):
         
         self.denoise_checkbox = QCheckBox("Flecken entfernen (sehr langsam)")
-        self.denoise_checkbox.clicked.connect(self.de_activate_denoise)
-        denoise_layout.addWidget(self.denoise_checkbox)
-        
-        density_buttonlayout = QHBoxLayout()
-        self.density_group = QButtonGroup(self)
-        self.density_4 = QRadioButton("Kleinere Zusammenhänge", self)
-        self.density_8 = QRadioButton("Größere Zusammenhänge", self)
-        self.density_4.setChecked(True)
-        density_buttonlayout.addWidget(self.density_4)
-        density_buttonlayout.addWidget(self.density_8)
-        self.density_group.addButton(self.density_8)
-        self.density_group.addButton(self.density_4)
-        denoise_layout.addLayout(density_buttonlayout)
-
-        slider_box = QHBoxLayout()
-        self.denoise_slider_value = QLabel("12")
-        slider_box.addWidget(self.denoise_slider_value)
-        self.denoise_slider = QSlider(Qt.Horizontal)
-        self.denoise_slider.setValue(12)
-        self.denoise_slider.setMaximum(50)
-        self.denoise_slider.setMinimum(0)
-        self.denoise_slider.setSingleStep(1)
-        self.denoise_slider.setTickPosition(QSlider.TicksBelow)
-        self.denoise_slider.setTickInterval(5)
-        self.denoise_slider.valueChanged.connect(lambda value: self.denoise_slider_value.setText("%s" % value))
-        slider_box.addWidget(self.denoise_slider)
-        denoise_layout.addLayout(slider_box)
-        
-        self.de_activate_denoise()
-
-        denoise_box.setLayout(denoise_layout)
-        
-        return denoise_box
-
-    def de_activate_denoise(self):
-        
-        if self.denoise_checkbox.isChecked():
-            self.denoise_slider.setEnabled(True)
-            self.density_8.setEnabled(True)
-            self.density_4.setEnabled(True)
-        else:
-            self.denoise_slider.setEnabled(False)
-            self.density_8.setEnabled(False)
-            self.density_4.setEnabled(False)
+        return self.denoise_checkbox
 
     def _get_sort_box(self):
         
@@ -433,35 +387,29 @@ class Window(QWidget):
 
     def compile_job_definition(self):
         
-        params = JobDefinition()
-        params.task = self.task_select.currentText()
-        params.fileinfos = self.fileinfos.copy()
-        if params.task == TASK_COLLATE_TO_PDF:
+        job_definition = JobDefinition()
+        job_definition.task = self.task_select.currentText()
+        job_definition.fileinfos = self.fileinfos.copy()
+        if job_definition.task == TASK_COLLATE_TO_PDF:
             dialog = QFileDialog()
             dialog.setNameFilter("Pdf-Dateien (*.pdf)")
             selection = QFileDialog().getSaveFileName()
-            params.output_path = selection[0]
+            job_definition.output_path = selection[0]
 
-        params.resolution_change = self._get_resolution()
-        params.modus_change = self._get_modus()
-        params.binarization_algorithm = self.bw_algo_select.currentText()
-        params.threshold_value = int(self.threshold_slider.value())
-        params.split = self.split_box.isChecked()
-        params.sort = self._get_sorting()
+        job_definition.resolution_change = self._get_resolution()
+        job_definition.modus_change = self._get_modus()
+        job_definition.binarization_algorithm = self.bw_algo_select.currentText()
+        job_definition.threshold_value = int(self.threshold_slider.value())
+        job_definition.split = self.split_box.isChecked()
+        job_definition.sort = self._get_sorting()
         if self.rotate_auto.isChecked():
-            params.rotation = 0
-            params.autorotation = True
+            job_definition.rotation = 0
+            job_definition.autorotation = True
         else:
-            params.rotation = self._get_rotation()
-            params.autorotation = False
-        params.denoise = self.denoise_checkbox.isChecked()
-        params.denoise_threshold = self.denoise_slider.value()
-        params.connectivity = 4
-        if self.density_8.isChecked():
-            params.connectivity = 8
-        else:
-            params.connectivity = 4
-        return params
+            job_definition.rotation = self._get_rotation()
+            job_definition.autorotation = False
+        job_definition.denoise = self.denoise_checkbox.isChecked()
+        return job_definition
     
     def _get_sorting(self):
         

@@ -3,166 +3,74 @@ Created on 29.03.2021
 
 @author: michael
 '''
-from os import path
-import re
-import tempfile
-from xml.dom.minidom import parseString, Element
-
+from Asb.ScanConverter.ImageTypeConversion import ndarray_to_pil, \
+    pil_to_native_cv2image, native_cv2image_to_pil, pil_to_rgb_cv2image, \
+    rgb_cv2image_to_pil, pil_to_ndarray
 from PIL import Image, ImageOps
-import cv2
 from injector import singleton
 from matplotlib import pyplot
-from numpy import ndarray, median
+from skimage.filters.thresholding import threshold_otsu, threshold_sauvola
+from xml.dom.minidom import parseString, Element
+import cv2
 import numpy
 import pytesseract
-from skimage.filters.thresholding import threshold_otsu, threshold_sauvola
-
-
-def pil_to_skimage(img: Image) -> ndarray:
-
-    return pil_to_ndarray(img)
-
-def skimage_to_pil(ndarray: ndarray) -> Image:
-    
-    return ndarray_to_pil(ndarray)
-
-def pil_to_ndarray(img: Image) -> ndarray:
-    
-    return numpy.array(img)
-
-def ndarray_to_pil(ndarray: ndarray) -> Image:
-    
-    return Image.fromarray(ndarray)
-
-def pil_to_cv2image(img: Image):
-    
-    with tempfile.TemporaryDirectory() as tmpdir:
-        tmpfile = path.join(tmpdir, "img.png") 
-        img.save(tmpfile)
-        cv2_image = cv2.imread(tmpfile)
-        return cv2_image[..., ::-1]
-    
-def cv2image_to_pil(cv2_image):
-    
-    img = cv2_image[..., ::-1]
-    return ndarray_to_pil(img[..., ::-1])
+import re
+from Asb.ScanConverter.Ocr.Alto import AltoPageLayout
 
 class MissingResolutionInfo(Exception):
     
     pass
 
-class StringObject:
-    
-    dotted_characters = {'i': 2, 'ä': 3, 'ö': 3, 'ü': 3, 'Ä': 3, 'Ö': 3, 'Ü': 3, '.': 1, '!': 2, ':': 2, ';': 2}
-
-    def __init__(self, stringElement: Element):
-        
-        self.stringElement = stringElement
-    
-    def is_string_with_dots(self):
-        
-        # Avoid strings with accented characters etc.
-        empty_string = re.sub("[a-zA-ZäöüÄÖÜ.!:;]*", '', self.get_text())
-        if len(empty_string) != 0:
-            return False
-        without_dotted = re.sub("[iäöüÄÖÜ.!:;]", '', self.get_text())
-        if self.get_text() != without_dotted:
-            return True
-        return False
-    
-    def get_number_of_shapes(self):
-        
-        shapes = 0
-        for character in self.get_text():
-            if character in self.dotted_characters:
-                shapes += self.dotted_characters[character]
-            else:
-                shapes += 1
-        return shapes
-        
-    def get_text(self):
-        
-        return self.stringElement.getAttribute("CONTENT")
-    
-    def get_bounding_box(self):
-        
-        x1 = int(self.stringElement.getAttribute("HPOS"))
-        y1 = int(self.stringElement.getAttribute("VPOS"))
-        x2 = x1 + int(self.stringElement.getAttribute("WIDTH"))
-        y2 = y1 + int(self.stringElement.getAttribute("HEIGHT"))
-        return x1, y1, x2, y2
-
-class AltoPageLayout:
-    
-    def __init__(self, img):
-
-        self.dom = parseString(pytesseract.image_to_alto_xml(img).decode('utf-8'))
-    
-    def write_to_file(self, filename):
-
-        file = open(filename, "w")
-        self.dom.writexml(file, indent="   ")
-        file.close()
-    
-    def getAllStrings(self) -> [StringObject]:
-
-        strings = []
-        for string in self.dom.getElementsByTagName("String"):
-            strings.append(StringObject(string))
-        return strings
-        
-    def get_big_text_block_coordinates(self):
-        
-        block = self.get_big_text_block()
-        hpos = block.getAttributeNode("HPOS")
-        vpos = block.getAttributeNode("VPOS")
-        width = block.getAttributeNode("WIDTH")
-        height = block.getAttributeNode("HEIGHT")
-        x1 = int(hpos.value)
-        y1 = int(vpos.value)
-        x2 = x1 + int(width.value)
-        y2 = y1 + int(height.value)
-        
-        return x1, y1, x2, y2
-    
-    def get_median_text_height(self):
-        
-        heights = []
-        for string in self.dom.getElementsByTagName("String"):
-            heights.append(int(string.getAttribute("HEIGHT")))
-        return numpy.median(heights)
-        
-    def get_layout(self):
-        
-        return self.dom.gmittelwertetElementsByTagName("Layout")[0]
-    
-    def get_first_page(self):
-        
-        return self.dom.getElementsByTagName("Page")[0]
-
-    def get_big_text_block(self) -> Element:
-
-        for i in range(0,10):
-            for element in self.dom.getElementsByTagName("TextBlock"):
-                width = int(element.getAttributeNode("WIDTH").value)
-                height = int(element.getAttributeNode("HEIGHT").value)
-                if width * height > 10000 * (10-i):
-                    return element
-        # Safety
-        return self.dom.getElementsByTagName("TextBlock")[0]
     
 @singleton
 class ImageFileOperations:
+    '''
+    This class is a collection of common image manipulation
+    methods, mostly wrappers around different implementation
+    from PIL, ski, open CV, numpy to have a common interface that
+    works with PIL images.
+    TODO: Keep resolution information when using numpy / cv2.
+    '''
     
     def __init__(self):
         
         self.dilation_kernel = numpy.ones((2, 2), 'uint8')
         self.erosion_kernel = numpy.ones((2, 2), 'uint8')
+        
+    def load_image(self, filename: str) -> Image:
+        
+        return Image.open(filename)
+    
+    def save_image(self, img: Image, filename: str):
+        
+        if filename[-4:] == '.tif':
+            img.save(filename, compression="tiff_lzw", dpi=self.get_resolution(img))
+        else:
+            img.save(filename, dpi=self.get_resolution(img))
+            
+    def get_resolution(self, img: Image) -> (int,):
+        
+        if not 'dpi' in img.info:
+            raise MissingResolutionInfo()
+        
+        xres, yres = img.info['dpi']
+        if xres == 1 or yres == 1:
+            raise MissingResolutionInfo()
+        
+        return xres, yres
+        
     
     def enhance_contrast(self, img: Image) -> Image:
-        
-        #-----Reading the image-----------------------------------------------------
-        cv2_img = pil_to_cv2image(img)
+        '''
+        A wrapper around the cv2 implementation. This is just
+        code lifted from stackoverflow. I have not the slightest
+        idea how it works, but it works.
+        '''
+        if img.mode == '1' or img.mode == "L":
+            cv2_img = pil_to_native_cv2image(img.convert("RGB"))
+        else:
+            cv2_img = pil_to_native_cv2image(img)
+
         #-----Converting image to LAB Color model----------------------------------- 
         lab= cv2.cvtColor(cv2_img, cv2.COLOR_BGR2LAB)
         #-----Splitting the LAB image to different channels-------------------------
@@ -173,25 +81,36 @@ class ImageFileOperations:
         #-----Merge the CLAHE enhanced L-channel with the a and b channel-----------
         limg = cv2.merge((cl,a,b))
         #-----Converting image from LAB Color model to RGB model--------------------
-        return cv2image_to_pil(cv2.cvtColor(limg, cv2.COLOR_LAB2BGR))
+        return native_cv2image_to_pil(cv2.cvtColor(limg, cv2.COLOR_LAB2BGR), self.get_resolution(img))
     
     def apply_dilation(self, img: Image):
+        '''
+        A wrapper around the cv2 implementation
+        '''
         
-        cv2_img = pil_to_cv2image(img)
+        cv2_img = pil_to_rgb_cv2image(img)
         
         dilated = cv2.dilate(cv2_img, self.dilation_kernel, iterations=1)
         
-        return cv2image_to_pil(dilated)
+        return rgb_cv2image_to_pil(dilated, self.get_resolution(img))
     
     def apply_erosion(self, img: Image):
+        '''
+        A wrapper around the cv2 implementation
+        '''
         
-        cv2_img = pil_to_cv2image(img)
+        cv2_img = pil_to_rgb_cv2image(img)
         
         eroded = cv2.erode(cv2_img, self.erosion_kernel, iterations=1)
         
-        return cv2image_to_pil(eroded)
+        return rgb_cv2image_to_pil(eroded, self.get_resolution(img))
         
     def detect_rotation_angle(self, img: Image):
+        '''
+        This uses tesseract to determine if the image
+        needs rotation. Don't confuse this with deskewing.
+        This is about, 90, 180 and 240 degree rotation.
+        '''
         
         info = pytesseract.image_to_osd(img).replace("\n", " ")
         matcher = re.match('.*Orientation in degrees:\s*(\d+).*', info)
@@ -201,86 +120,107 @@ class ImageFileOperations:
             raise(Exception("RE is not working"))
 
     def rotate(self, img: Image, angle) -> Image:
+        '''
+        Just a wrapper around the PIL implementation
+        '''
             
         return img.rotate(angle, expand=True)
 
-    def change_resolution(self, img: Image, new_resolution):
+    def change_resolution(self, img: Image, new_resolution) -> Image:
+        '''
+        TODO: This need a complete rewrite. Especially we need
+        to keep the image resolution, which currently is lost on
+        upscaling. Also the handling of missing dpi information
+        is not very useful. Perhaps it would be better to make
+        the actual resolution change dependend on a factor and
+        make this signature just a wrapper around it.
+        '''
         
-        if not 'dpi' in img.info:
-            for key in img.info.keys():
-                print(img.info[key])
-            return img
-            raise MissingResolutionInfo()
-        
-        current_xres, current_yres = img.info['dpi']
-        if current_xres == 1 or current_yres == 1:
-            for key in img.info.keys():
-                print(img.info[key])
-            return img
-            raise MissingResolutionInfo()
+        current_xres, current_yres = self.get_resolution(img)
         
         if current_xres == new_resolution and current_yres == new_resolution:
             return img
         
         current_width, current_height = img.size
-
         new_width = int(current_width * new_resolution / current_xres)
         new_height = int(current_height * new_resolution / current_yres)
-        
-        new_size = (new_width, new_height)
+
+        if new_width > current_width:
+            return self._scale_up(img, new_width / current_width)
+        else:
+            new_size = (new_width, new_height)
+            return self._scale_down(img, new_size)
+     
+    def _scale_down(self, img: Image, new_size) -> Image:   
+        '''
+        Wrapper around the downscale implementation of PIL
+        '''
         
         return img.resize(new_size)
 
-    def scale_up(self, img: Image, factor):
-        
-        cv2_img = pil_to_cv2image(img)
+    def _scale_up(self, img: Image, factor) -> Image:
+        '''
+        Wrapper around the cv2 implementation
+        '''
+        (orig_xres, orig_yres) = self.get_resolution(img)
+        cv2_img = pil_to_rgb_cv2image(img)
         original_height, original_width = cv2_img.shape[:2]
         resized_image = cv2.resize(cv2_img, (int(original_width*factor), int(original_height*factor)), interpolation=cv2.INTER_CUBIC )
-        return cv2image_to_pil(resized_image)
+        return rgb_cv2image_to_pil(resized_image, (int(orig_xres * factor), int(orig_yres * factor)))
 
-    def binarization_floyd_steinberg(self, img):
+    def binarization_floyd_steinberg(self, img) -> Image:
+        '''
+        Wrapper around the PIL implementation
+        '''
         
         # Default for PIL images convert is Floyd/Steinberg
         return img.convert("1")
 
-    def binarization_fixed(self, img, threshold=127):
+    def binarization_fixed(self, img, threshold=127) -> Image:
+        '''
+        Wrapper around the PIL implementation
+        '''
 
         return self.convert_to_gray(img).point(lambda v: 1 if v > threshold else 0, "1")
 
-    def binarization_otsu(self, img):
+    def binarization_otsu(self, img) -> Image:
+        '''
+        Wrapper around the cv2 implementation
+        '''
 
         in_array = numpy.array(self.convert_to_gray(img))
         mask = threshold_otsu(in_array)
         out_array = in_array > mask
         return Image.fromarray(out_array)
     
-    def binarization_sauvola(self, img, window_size=41):
+    def binarization_sauvola(self, img, window_size=41) -> Image:
+        '''
+        Wrapper around the cv2 implementation
+        '''
 
         in_array = numpy.array(self.convert_to_gray(img))
         mask = threshold_sauvola(in_array, window_size=window_size)
         out_array = in_array > mask
         return Image.fromarray(out_array)
     
-    def convert_to_gray(self, img: Image):
+    def convert_to_gray(self, img: Image) -> Image:
+        '''
+        Simple wrapper around the PIL conversion routine.
+        
+        TODO: Look for more sophisticated methods
+        to turn color images into gray ones.
+        '''
+        
         
         if img.mode == "1" or img.mode == "L":
             return img
         
         return img.convert("L")
 
-    def print_shape_information(self, img: Image):
-        
-        no_of_components, labels, sizes = self.connected_components_with_stats(img)
-        print("Number of components: %d." % (no_of_components - 1))
-        print("Average shape size: %d." % numpy.average(sizes[1:]))
-        print("Standard deviation: %f." % numpy.std(sizes[1:]))
-        print("Median shape size: %d." % numpy.median(sizes[1:]))
-        print("Median / Average: %f." % (numpy.median(sizes[1:]) / numpy.average(sizes[1:])))
-        num_bins = 256
-        n, bins, patches = pyplot.hist(sizes[1:], num_bins, facecolor='blue', alpha=0.5)
-        pyplot.show()
-    
     def connected_components_with_stats(self, img: Image):
+        '''
+        Just a wrapper around the cv2 method.
+        '''
 
         if img.mode != "1":
             raise Exception("Please call the connected_components method only on binary images!")
@@ -293,22 +233,31 @@ class ImageFileOperations:
         # Leave out background 
         return no_of_components, labels, sizes
 
-    def denoise(self, img: Image):
+    def isolate_text(self, img: Image) -> Image:
+        
+        layout = AltoPageLayout(img)
+        mask = layout.get_text_mask()
+        masked_img = img.copy()
+        masked_img.paste(255, (0,0,img.width, img.height), mask=mask)
+        return masked_img
+
+
+    def denoise(self, img: Image) -> Image:
+        '''
+        This is quite complicated. We want to remove small speckles, but we do
+        not want to remove punktuation marks or dots on characters like i or ä.
+        So first we need to determine, if denoising is relevant at all. This
+        will be determined in _is_denoise_necessary. And if it is, we use
+        _determine_denoise_threshold to determine the size of legitimate dots
+        and stay well under this size.
+        '''
         
         no_of_components, labels, sizes = self.connected_components_with_stats(img)
 
-        small_shapes = 0
-        for shape_identifier in range(1, no_of_components):
-            if sizes[shape_identifier] < 4:
-                small_shapes += 1
-        
-        if small_shapes / (no_of_components - 1) < 0.1:
-            #print("No need to denoise")
+        if not self._is_denoise_necessary(no_of_components, sizes):
             return img
         
-        textheight = AltoPageLayout(img).get_median_text_height()
-        shape_diameter = textheight / 8
-        threshold = int(shape_diameter * shape_diameter)
+        threshold = self._determine_denoise_threshold(img)
 
         bw_new = numpy.ones((labels.shape), dtype=numpy.bool)
         for shape_identifier in range(1, no_of_components):
@@ -316,7 +265,51 @@ class ImageFileOperations:
                 bw_new[labels == shape_identifier] = 0
         return Image.fromarray(bw_new)
     
-    def determine_dot_size(self, img: Image):
+    def _is_denoise_necessary(self, no_of_components, sizes):
+        '''
+        We look for very small speckles in the image (size < 4),
+        and if they constitute 10% or more of all shapes,
+        we should denoise.
+        '''
+        small_shapes = 0
+        for shape_identifier in range(1, no_of_components):
+            if sizes[shape_identifier] < 4:
+                small_shapes += 1
+        return not small_shapes / (no_of_components - 1) < 0.1
+    
+    def _determine_denoise_threshold(self, img: Image) -> int:
+        '''
+        This one uses actual dot sizes from the document
+        to calculate the threshold
+        '''
+        
+        computed_dot_size = self._determine_dot_size(img)
+        # Apply a safety margin
+        threshold = int(computed_dot_size * 0.95)
+        return threshold
+    
+    def _determine_denoise_threshold2(self, img: Image) -> int:
+        '''
+        This implementation uses the text height to determine
+        the size of dots (for i or umlauts etc.) that we do not
+        want do remove.
+        '''
+        
+        textheight = AltoPageLayout(img).get_median_text_height()
+        shape_radius = textheight / 18
+        return int(shape_radius * shape_radius * 3.14)
+
+    def _determine_dot_size(self, img: Image):
+        '''
+        This uses detected text snippets that contains dots.
+        The reasoning: We know which characters to expect, so
+        we also know to expect n shapes in corresponding the graphic
+        snippet. Since the dot is the smallest shape that is
+        legitimate, we sort the sizes and take the n-th shape
+        size from the end of the list. And because this is not
+        perfect, we do this for all text snippets with dots and
+        take the median dot size.
+        '''
         
         ndarray = pil_to_ndarray(img)
         
@@ -324,11 +317,11 @@ class ImageFileOperations:
         alto_layout = AltoPageLayout(bin_image)
         
         dotsizes = []
-        for text_string in alto_layout.getAllStrings():
+        for text_string in alto_layout.get_all_strings():
             if text_string.is_string_with_dots():
                 x1, y1, x2, y2 = text_string.get_bounding_box()
                 expected_no_of_shapes = text_string.get_number_of_shapes()
-                no_of_components, labels, sizes = self.connectedComponentsWithStats(ndarray_to_pil(ndarray[y1:y2, x1:x2]))
+                no_of_components, labels, sizes = self.connected_components_with_stats(Image.fromarray(ndarray[y1:y2, x1:x2]))
                 size_values = []
                 for shape_identifier in range(1, no_of_components):
                     size_values.append(sizes[shape_identifier])
@@ -336,24 +329,11 @@ class ImageFileOperations:
                 if len(size_values) < expected_no_of_shapes:
                     continue
                 dotsizes.append(size_values[-1 * expected_no_of_shapes])
-        print("Dotsize: %f" % numpy.median(dotsizes))
-                
-            
-        return 13
+        if len(dotsizes) > 0:
+            return numpy.median(dotsizes)
+        else:        
+            return 13
         
 
-    def show_image(self, img: Image):
-
-        pyplot.imshow(img)
-        pyplot.title('Image')
-        pyplot.xticks([])
-        pyplot.yticks([])
-        pyplot.show()
-    
-    def show_image2(self, img: Image):
-        
-        cv2.imshow("Image", pil_to_cv2image(img))
-        cv2.waitKey(0)
-        cv2.destroyAllWindows()
 
 
