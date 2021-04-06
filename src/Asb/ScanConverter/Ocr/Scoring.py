@@ -19,14 +19,14 @@ class ScoreResult:
         
         display = "Score is %f" % self.score_value
         if self.verbose:
-            for word in self.found.keys():
-                display += "\nFound: %s (%d times)" % (word, self.found[word])
-            for word in self.not_found.keys():
-                display += "\nNot found: %s (%d times missing)" % (word, self.not_found[word])
-            for word in self.false_found.keys():
-                display += "\nFound instead: %s (%d times)" % (word, self.false_found[word])
+            for word in self.found_words.keys():
+                display += "\nFound: %s (%d times)" % (word, self.found_words[word])
+            for word in self.not_found_words.keys():
+                display += "\nNot found: %s (%d times missing)" % (word, self.not_found_words[word])
+            for word in self.false_found_words.keys():
+                display += "\nFound instead: %s (%d times)" % (word, self.false_found_words[word])
         else:
-            display += ". Words found: %d. Words not found: %d." % (len(self.found), len(self.not_found))
+            display += ". Words found: %d. Words not found: %d." % (len(self.found_words), len(self.not_found_words))
         return display
 
     def _get_score_value(self):

@@ -8,10 +8,10 @@ import unittest
 
 from PIL import Image
 
-from Asb.ScanConverter.Scoring import OCRScorer
 from Asb.ScanConverter.Ocr.OCR import OcrRunner, OcrPreprocessor,\
     OcrPostprocessor
 from Asb.ScanConverter.ImageOperations import ImageFileOperations
+from Asb.ScanConverter.Ocr.Scoring import OCRScorer
 
 
 class OCRServiceTest(unittest.TestCase):
