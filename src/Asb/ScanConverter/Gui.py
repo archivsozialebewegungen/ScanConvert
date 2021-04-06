@@ -14,7 +14,8 @@ from injector import Injector, inject, singleton
 
 from Asb.ScanConverter.Services import FormatConversionService, GraphicFileInfo, \
     JobDefinition, GRAYSCALE, BLACK_AND_WHITE, FLOYD_STEINBERG, THRESHOLD, \
-    SAUVOLA, MIXED, PdfService
+    SAUVOLA, MIXED
+from Asb.ScanConverter.Ocr.PdfService import PdfService
 
 
 TASK_CONVERT_JPEG = "Jpegs nach tif konvertieren"

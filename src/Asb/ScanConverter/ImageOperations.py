@@ -285,7 +285,8 @@ class ImageFileOperations:
         
         computed_dot_size = self._determine_dot_size(img)
         # Apply a safety margin
-        threshold = int(computed_dot_size * 0.95)
+        threshold = int(computed_dot_size * 0.90)
+        print("Using denoise threshold %d" % threshold)
         return threshold
     
     def _determine_denoise_threshold2(self, img: Image) -> int:

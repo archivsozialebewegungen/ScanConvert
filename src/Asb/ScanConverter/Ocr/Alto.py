@@ -9,7 +9,40 @@ import numpy
 from PIL import Image
 import re
 
-class StringObject:
+class ElementWrapper:
+    
+    def get_bounding_box(self):
+        
+        x1 = int(self.element.getAttribute("HPOS"))
+        y1 = int(self.element.getAttribute("VPOS"))
+        x2 = x1 + self.get_width()
+        y2 = y1 + self.get_height()
+        return x1, y1, x2, y2
+    
+    def get_width(self):
+        
+        return int(self.element.getAttribute("WIDTH"))
+
+    def get_height(self):
+        
+        return int(self.element.getAttribute("HEIGHT"))
+    
+
+class LineObject(ElementWrapper):
+    
+    def __init__(self, lineElement: Element):
+        
+        self.element = lineElement
+        
+    def get_strings(self):
+        
+        elements = []
+        for string_element in self.element.getElementsByTagName("String"):
+            elements.append(StringObject(string_element))
+            
+        return elements
+
+class StringObject(ElementWrapper):
     '''
     Helper class for string representations in the AltoPageLayout class.
     '''
@@ -18,7 +51,7 @@ class StringObject:
 
     def __init__(self, stringElement: Element):
         
-        self.stringElement = stringElement
+        self.element = stringElement
     
     def is_string_with_dots(self):
         
@@ -43,16 +76,8 @@ class StringObject:
         
     def get_text(self):
         
-        return self.stringElement.getAttribute("CONTENT")
+        return self.element.getAttribute("CONTENT")
     
-    def get_bounding_box(self):
-        
-        x1 = int(self.stringElement.getAttribute("HPOS"))
-        y1 = int(self.stringElement.getAttribute("VPOS"))
-        x2 = x1 + int(self.stringElement.getAttribute("WIDTH"))
-        y2 = y1 + int(self.stringElement.getAttribute("HEIGHT"))
-        return x1, y1, x2, y2
-
 class AltoPageLayout:
     '''
     This is a class to get information about an image using OCR.
@@ -76,6 +101,13 @@ class AltoPageLayout:
             strings.append(StringObject(string))
         return strings
         
+    def get_all_lines(self) -> [LineObject]:
+
+        lines = []
+        for line in self.dom.getElementsByTagName("TextLine"):
+            lines.append(LineObject(line))
+        return lines
+
     def get_big_text_block_coordinates(self):
         
         block = self.get_big_text_block()

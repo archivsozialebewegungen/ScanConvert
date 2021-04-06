@@ -246,7 +246,11 @@ class FormatConversionService(object):
 
         
 @singleton
-class PdfService:
+class PdfServiceOld:
+    '''
+    This uses tiff tools and ocrmypdf to generate pdfs, the new
+    service does not need external tools.
+    '''
     
     @inject
     def __init__(self, format_conversion_service: FormatConversionService):

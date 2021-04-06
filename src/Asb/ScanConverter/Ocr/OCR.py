@@ -10,9 +10,12 @@ from Asb.ScanConverter.Ocr.Alto import AltoPageLayout
 import numpy
 from Asb.ScanConverter.ImageTypeConversion import pil_to_ndarray
 import pytesseract
+from injector import singleton, inject
 
+@singleton
 class OcrPreprocessor:
     
+    @inject
     def __init__(self, image_operations: ImageFileOperations):
         
         self.image_operations = image_operations
@@ -24,7 +27,9 @@ class OcrPreprocessor:
             img = self.image_operations.apply_dilation(img)
         img = img.convert('L')
         img = self.image_operations.binarization_sauvola(img)
-        img = self.image_operations.denoise(img)
+        # At the moment denoising produces more harm with vanishing dots
+        # than that it helps OCR
+        #img = self.image_operations.denoise(img)
         
         return img
 
@@ -51,9 +56,11 @@ class OcrPreprocessor:
         mean = numpy.mean(histogram[0][:48])
         standard_deviation = numpy.std(histogram[0][:48])
         return standard_deviation / mean < 2
-    
+
+@singleton    
 class OcrPostprocessor:
     
+    @inject
     def postprocess(self, text:str) -> str:
 
         text = self.remove_hyphenation(text)
@@ -64,8 +71,10 @@ class OcrPostprocessor:
         
         return re.sub("(?<=\w)-\s+", '', text, flags=re.DOTALL)
 
+@singleton
 class OcrRunner:
     
+    @inject
     def __init__(self, preprocessor: OcrPreprocessor, postprocessor: OcrPostprocessor):
         
         self.preprocessor = preprocessor
@@ -80,3 +89,7 @@ class OcrRunner:
     def get_alto_layout(self, img: Image, language: str='deu'):
         
         return AltoPageLayout(self.preprocessor.preprocess(img), language=language)
+    
+    def get_hocr(self, img: Image, language: str='deu'):
+        
+        return pytesseract.image_to_pdf_or_hocr(self.preprocessor.preprocess(img), extension='hocr', lang=language)
