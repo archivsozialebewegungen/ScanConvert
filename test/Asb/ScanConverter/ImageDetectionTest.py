@@ -11,6 +11,7 @@ from Asb.ScanConverter.ImageDetection import Detectron2ImageDetectionService,\
     IllustrationMetaImage
 from Asb.ScanConverter.Services import ImageFileOperations
 from layoutparser.models.catalog import CONFIG_CATALOG
+from Asb.ScanConverter.DeveloperTools import DeveloperTools
 
 
 class ImageDetectionTest(unittest.TestCase):
@@ -18,7 +19,10 @@ class ImageDetectionTest(unittest.TestCase):
     def setUp(self):
         
         self.image_file_operations = ImageFileOperations()
+        self.dev_tools = DeveloperTools()
+        
         self.img = (Image.open(os.path.join("Images", "Image1.png")), Image.open(os.path.join("Images", "Image2.png")))
+        #self.img = (Image.open(os.path.join("Images", "Simon056.jpg")), Image.open(os.path.join("Images", "Image2.png")))
         self.correct_mask = (numpy.zeros((self.img[0].height, self.img[0].width), dtype=bool),
                              numpy.zeros((self.img[1].height, self.img[1].width), dtype=bool))
         self.correct_mask[0][1560:2885, 1274:2295] = True
@@ -34,6 +38,16 @@ class ImageDetectionTest(unittest.TestCase):
             image[self.correct_mask[i]] = 1
             Image.fromarray(image).save("masked%d.png" % i)
 
+    def testCreateMask(self):
+
+        service = Detectron2ImageDetectionService()
+        bw_image = self.image_file_operations.binarization_otsu(self.img[0])
+        meta_image = service.get_illustration_meta_image(bw_image)
+        mask = meta_image.get_illustration_mask()
+        self.dev_tools.show_image(mask, "Mask")
+        for img in meta_image.get_all_illustrations():
+            self.dev_tools.show_image(img[2])
+        
     def testDetectron2ImageDetection(self):
 
         for image_index in range(0, len(self.img)):

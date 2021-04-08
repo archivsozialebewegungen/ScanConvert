@@ -9,6 +9,8 @@ import numpy
 
 from Asb.ScanConverter.ImageTypeConversion import pil_to_native_cv2image
 from layoutparser.models.catalog import MODEL_CATALOG, CONFIG_CATALOG
+from injector import inject
+from Asb.ScanConverter.ImageOperations import ImageFileOperations
 
 
 class IllustrationMetaImage:
@@ -81,17 +83,36 @@ class Detectron2ImageDetectionService(object):
               'HJDataset': {1:"Page Frame", 2:"Row", 3:"Title Region", 4:"Text Region", 5:"Title", 6:"Subtitle", 7:"Other"}
               }
 
-    def __init__(self, training_set="PubLayNet", model='faster_rcnn_R_50_FPN_3x'):
+    @inject
+    def __init__(self, img_ops=ImageFileOperations):
 
-        self.training_set = training_set
-        self.config_path =  CONFIG_CATALOG[training_set][model]
+        self.img_ops = img_ops
+        self.training_set = "PubLayNet"
+        self.model = 'faster_rcnn_R_50_FPN_3x'
         self.image_labels = ('ImageRegion', 'Figure', 'Photograph', 'Illustration', 'Map', 'Comics/Cartoon', 'Editorial Cartoon', 'Other')
         self.score_threshold = 0.7
         self.counter = 0
+    
+    def _get_config_path(self):
+
+        return  CONFIG_CATALOG[self.training_set][self.model]
+    
+    def change_training_set(self, training_set: str):
+
+        self.training_set = training_set
         
+    def change_model(self, model: str):
+
+        self.model = model
+    
     def get_illustration_meta_image(self, img):
 
-        cv2_image = pil_to_native_cv2image(img.convert("RGB"))
+        if img.mode == "1":
+            color_image = img.convert("RGB")
+        else:
+            color_image = self.img_ops.binarization_otsu(img).convert("RGB")
+
+        cv2_image = pil_to_native_cv2image(color_image)
         model = layoutparser.Detectron2LayoutModel(
             config_path = self.config_path, # In model catalog
             label_map   = self.labels[self.training_set], # In model`label_map`
@@ -125,3 +146,5 @@ class Detectron2ImageDetectionService(object):
             return self.DRAWING
         else:
             return self.PHOTO 
+
+    config_path = property(_get_config_path)

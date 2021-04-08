@@ -53,7 +53,7 @@ class PdfService:
             
             foreground_img, image_info = self.format_conversion_service.perform_changes(img, image_info, job)
             foreground_img_stream = io.BytesIO()
-            foreground_img.save(foreground_img_stream, format='tif')
+            foreground_img.save(foreground_img_stream, format='png')
             foreground_img_stream.seek(0)
             foreground_img_reader = ImageReader(foreground_img_stream)
             pdf.drawImage(foreground_img_reader, 0, 0, width=page_width, height=page_height)
