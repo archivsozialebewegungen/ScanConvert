@@ -3,7 +3,7 @@ Created on 05.04.2021
 
 @author: michael
 '''
-from PIL import Image
+from PIL import Image, ImageFilter
 import re
 from Asb.ScanConverter.ImageOperations import ImageFileOperations
 from Asb.ScanConverter.Ocr.Alto import AltoPageLayout
@@ -11,27 +11,57 @@ import numpy
 from Asb.ScanConverter.ImageTypeConversion import pil_to_ndarray
 import pytesseract
 from injector import singleton, inject
+from Asb.ScanConverter.ImageStatistics import ImageStatistics
 
 @singleton
 class OcrPreprocessor:
     
     @inject
-    def __init__(self, image_operations: ImageFileOperations):
+    def __init__(self, image_operations: ImageFileOperations,
+                 image_statistics: ImageStatistics):
         
         self.image_operations = image_operations
+        self.image_statistics = image_statistics
     
     def preprocess(self, img: Image) -> Image:
         
         if self.needs_more_contrast(img):
             img = self.image_operations.enhance_contrast(img)
             img = self.image_operations.apply_dilation(img)
+        if self.image_statistics.advice_sharpening(img):
+            img = self.image_operations.sharpen(img)
         img = img.convert('L')
         img = self.image_operations.binarization_sauvola(img)
         # At the moment denoising produces more harm with vanishing dots
         # than that it helps OCR
         #img = self.image_operations.denoise(img)
-        
         return img
+
+    def try_normalization(self, img: Image):
+        
+        if self.image_operations.get_resolution(img) == (300, 300):
+            return img
+        old_ocr_confidence = AltoPageLayout(img).confidence
+        new_img = self.image_operations.change_resolution(img, 300)
+        new_ocr_confidence = AltoPageLayout(new_img).confidence
+        if new_ocr_confidence > old_ocr_confidence:
+            print("Changed image resolution to 300.")
+            return new_img
+        else:
+            print("No resolution change.")
+            return img
+   
+    def try_enhancement(self, img: Image, method):
+
+        old_ocr_confidence = AltoPageLayout(img).confidence
+        new_img = method(img)
+        new_ocr_confidence = AltoPageLayout(new_img).confidence
+        if new_ocr_confidence > old_ocr_confidence:
+            print("Applied %s." % method.__name__)
+            return new_img
+        else:
+            print("Did not apply %s.", method.__name__)
+            return img
 
     def needs_more_contrast(self, img: Image) -> bool:
         '''

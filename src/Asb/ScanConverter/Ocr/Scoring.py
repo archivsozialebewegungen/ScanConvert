@@ -57,8 +57,8 @@ class OCRScorer:
                     score.found_words[word] = computed_word_list[word]
                 elif computed_word_list[word] > expected_word_list[word]:
                     # More than the existing occurencies found
-                    score.found_words = expected_word_list[word]
-                    score.false_found_words = computed_word_list[word] - expected_word_list[word]
+                    score.found_words[word] = expected_word_list[word]
+                    score.false_found_words[word] = computed_word_list[word] - expected_word_list[word]
                 else:
                     # Exactly found what was expected
                     score.found_words[word] = computed_word_list[word] 

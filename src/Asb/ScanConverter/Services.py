@@ -238,11 +238,12 @@ class FormatConversionService(object):
         filebase, file_extension = os.path.splitext(fileinfo.filepath)
         if len(images) == 1:
             new_filepath = filebase + '.tif'
-            images[0].save(new_filepath, compression="tiff_lzw", dpi=fileinfo.info['dpi'])
+            self.image_file_operations.save_image(images[0], new_filepath)
+            #images[0].save(new_filepath, compression="tiff_lzw", dpi=fileinfo.info['dpi'])
         else:
             for i in range(1, len(images) + 1):
                 new_filepath = "%s%0.3d.tif" % (filebase, i)
-                images[i-1].save(new_filepath, compression="tiff_lzw", dpi=fileinfo.info['dpi'])
+                self.image_file_operations.save_image(images[i-1], new_filepath)
 
         
 @singleton

@@ -49,6 +49,14 @@ class StringObject(ElementWrapper):
     
     dotted_characters = {'i': 2, 'ä': 3, 'ö': 3, 'ü': 3, 'Ä': 3, 'Ö': 3, 'Ü': 3, '.': 1, '!': 2, ':': 2, ';': 2}
 
+    def _get_confidence(self):
+        
+        return float(self.element.getAttribute("WC"))
+    
+    def _get_string_length(self):
+        
+        return len(self.get_text())
+
     def __init__(self, stringElement: Element):
         
         self.element = stringElement
@@ -78,6 +86,9 @@ class StringObject(ElementWrapper):
         
         return self.element.getAttribute("CONTENT")
     
+    len = property(_get_string_length)
+    confidentiality = property(_get_confidence)
+    
 class AltoPageLayout:
     '''
     This is a class to get information about an image using OCR.
@@ -88,6 +99,15 @@ class AltoPageLayout:
         self.img = img
         self.dom = parseString(pytesseract.image_to_alto_xml(img,lang=language).decode('utf-8'))
     
+    def _get_confidence(self):
+        
+        characters = 0
+        conf = 0.0
+        for string in self.get_all_strings():
+            characters += string.len
+            conf += string.confidentiality * string.len
+        return conf / characters
+            
     def write_to_file(self, filename):
 
         file = open(filename, "w")
@@ -150,4 +170,6 @@ class AltoPageLayout:
         for string in self.get_all_strings():
             x1, y1, x2, y2 = string.get_bounding_box()
             mask[y1:y2, x1:x2] = False
-        return Image.fromarray(mask) 
+        return Image.fromarray(mask)
+    
+    confidence = property(_get_confidence)

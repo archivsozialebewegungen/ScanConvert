@@ -6,7 +6,7 @@ Created on 29.03.2021
 from Asb.ScanConverter.ImageTypeConversion import ndarray_to_pil, \
     pil_to_native_cv2image, native_cv2image_to_pil, pil_to_rgb_cv2image, \
     rgb_cv2image_to_pil, pil_to_ndarray
-from PIL import Image, ImageOps
+from PIL import Image, ImageOps, ImageFilter
 from injector import singleton
 from matplotlib import pyplot
 from skimage.filters.thresholding import threshold_otsu, threshold_sauvola
@@ -44,7 +44,7 @@ class ImageFileOperations:
     def save_image(self, img: Image, filename: str):
         
         if filename[-4:] == '.tif':
-            img.save(filename, compression="tiff_lzw", dpi=self.get_resolution(img))
+            img.save(filename, compression="tiff_deflate", dpi=self.get_resolution(img))
         else:
             img.save(filename, dpi=self.get_resolution(img))
             
@@ -58,7 +58,10 @@ class ImageFileOperations:
             raise MissingResolutionInfo()
         
         return xres, yres
+     
+    def sharpen(self, img: Image) -> Image:
         
+        return img.filter(ImageFilter.SHARPEN)   
     
     def enhance_contrast(self, img: Image) -> Image:
         '''
@@ -146,10 +149,13 @@ class ImageFileOperations:
         new_height = int(current_height * new_resolution / current_yres)
 
         if new_width > current_width:
-            return self._scale_up(img, new_width / current_width)
+            scaled_img = self._scale_up(img, new_width / current_width)
         else:
             new_size = (new_width, new_height)
-            return self._scale_down(img, new_size)
+            scaled_img = self._scale_down(img, new_size)
+            
+        scaled_img.info['dpi'] = (new_resolution, new_resolution)
+        return scaled_img
      
     def _scale_down(self, img: Image, new_size) -> Image:   
         '''
@@ -191,7 +197,7 @@ class ImageFileOperations:
         in_array = numpy.array(self.convert_to_gray(img))
         mask = threshold_otsu(in_array)
         out_array = in_array > mask
-        return Image.fromarray(out_array)
+        return ndarray_to_pil(out_array, self.get_resolution(img))
     
     def binarization_sauvola(self, img, window_size=41) -> Image:
         '''
@@ -201,7 +207,7 @@ class ImageFileOperations:
         in_array = numpy.array(self.convert_to_gray(img))
         mask = threshold_sauvola(in_array, window_size=window_size)
         out_array = in_array > mask
-        return Image.fromarray(out_array)
+        return ndarray_to_pil(out_array, self.get_resolution(img))
     
     def convert_to_gray(self, img: Image) -> Image:
         '''
@@ -210,8 +216,7 @@ class ImageFileOperations:
         TODO: Look for more sophisticated methods
         to turn color images into gray ones.
         '''
-        
-        
+
         if img.mode == "1" or img.mode == "L":
             return img
         
@@ -228,10 +233,16 @@ class ImageFileOperations:
         inverted = ImageOps.invert(img.convert("RGB"))
         ndarray = numpy.array(inverted.convert("1"), dtype=numpy.uint8)
         no_of_components, labels, stats, centroids = cv2.connectedComponentsWithStats(ndarray, connectivity=8)
-        sizes = stats[:, cv2.CC_STAT_AREA];
+        sizes = stats[:, cv2.CC_STAT_AREA]
         
         # Leave out background 
         return no_of_components, labels, sizes
+
+    def invert(self, img: Image):
+        
+        ndarray = pil_to_ndarray(img)
+        inverted = numpy.invert(ndarray)
+        return ndarray_to_pil(inverted, self.get_resolution(img))
 
     def isolate_text(self, img: Image) -> Image:
         
