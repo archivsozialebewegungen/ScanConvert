@@ -345,6 +345,15 @@ class ImageFileOperations:
             return numpy.median(dotsizes)
         else:        
             return 13
+    
+    def split_image(self, img: Image):
+        
+        width, height = img.size
+        img1 = img.crop((0,0,int(width/2), height))
+        img2 = img.crop((int(width/2)+1,0,width, height))
+        return (img1, img2)
+
+
         
 
 

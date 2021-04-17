@@ -39,33 +39,91 @@ class PdfService:
         pdf.setCreator('Scan-Convert')
         pdf.setTitle(basename(job.output_path))
         dpi = 300
+
+        images = self.collect_and_convert_images(image_infos, job)
+        images = self.sort_images(images, job.sort)
         
-        for image_info in image_infos:
-            img = self.image_ops.load_image(image_info.filepath)
-            img_width, img_height = img.size
+        for image in images:
+            if image is None:
+                continue
+            img_width, img_height = image.size
+
             try:
-                dpi = img.info['dpi'][0]
+                dpi = image.info['dpi'][0]
             except KeyError:
                 pass
+            
             page_width = img_width * 72 / dpi
             page_height = img_height * 72 / dpi
+            
             pdf.setPageSize((page_width, page_height))
+
+            img_stream = io.BytesIO()
+            image.save(img_stream, format='png')
+            img_stream.seek(0)
+            img_reader = ImageReader(img_stream)
+            pdf.drawImage(img_reader, 0, 0, width=page_width, height=page_height)
             
-            foreground_img, image_info = self.format_conversion_service.perform_changes(img, image_info, job)
-            foreground_img_stream = io.BytesIO()
-            foreground_img.save(foreground_img_stream, format='png')
-            foreground_img_stream.seek(0)
-            foreground_img_reader = ImageReader(foreground_img_stream)
-            pdf.drawImage(foreground_img_reader, 0, 0, width=page_width, height=page_height)
-            
-            #alto_layout = self.ocr_runner.get_alto_layout(img)
-            hocr_layout = self.ocr_runner.get_hocr(img)
-            self.add_text_layer_from_hocr(pdf, hocr_layout, page_height, dpi)
+            if job.ocr:
+                #alto_layout = self.ocr_runner.get_alto_layout(img)
+                hocr_layout = self.ocr_runner.get_hocr(image)
+                self.add_text_layer_from_hocr(pdf, hocr_layout, page_height, dpi)
 
             pdf.showPage()
         
         pdf.save()
+        
+    def collect_and_convert_images(self, infos, job: JobDefinition):
+
+        images = []        
+        for image_info in infos:
+            img = self.image_ops.load_image(image_info.filepath)
+
+            converted_img, image_info = self.format_conversion_service.perform_changes(img, image_info, job)
             
+            if job.split: 
+                page_images = self.image_ops.split_image(converted_img)
+            else:
+                page_images = (converted_img, )
+
+            for image in page_images:
+                images.append(image)
+        
+        return images
+        
+    def sort_images(self, images, sorting):
+        
+        if sorting is None:
+            return images
+        if sorting is JobDefinition.SORT_FIRST_PAGE:
+            return self.sort_images_first_page(images)
+        if sorting is JobDefinition.SORT_SHEETS:
+            return self.sort_images_sheets(images)
+        
+        raise Exception("Unknown sorting request")
+    
+    def sort_images_first_pages(self, images):
+        
+        first = images[0]
+        del(images[0])
+        images.append(first)
+        return images
+    
+    def sort_images_sheets(self, images):
+        
+        filenumbers = []
+        for bogen in range(0, int(len(images) / 4)):
+            filenumbers.append(len(images) - (bogen * 2 + 1))
+            filenumbers.append(0 + bogen * 2)
+            filenumbers.append(1 + bogen * 2)
+            filenumbers.append(len(images) - (bogen * 2 + 2))
+        
+        sorted_images = [None] * len(images)
+        for i in range(0, len(filenumbers)):
+            sorted_images[filenumbers[i]] = images[i]
+            
+        return sorted_images
+
     def add_text_layer_from_alto(self, pdf: Canvas, alto_layout: AltoPageLayout, page_height: int, dpi: int):
         """Draw an invisible text layer for OCR data"""
         

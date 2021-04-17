@@ -16,6 +16,7 @@ from Asb.ScanConverter.Services import FormatConversionService, GraphicFileInfo,
     JobDefinition, GRAYSCALE, BLACK_AND_WHITE, FLOYD_STEINBERG, THRESHOLD, \
     SAUVOLA, MIXED
 from Asb.ScanConverter.Ocr.PdfService import PdfService
+import traceback
 
 
 TASK_CONVERT_JPEG = "Jpegs nach tif konvertieren"
@@ -56,6 +57,7 @@ class TaskManager():
         except Exception as e:
             # TODO: Show error somewhere
             print(e)
+            print(traceback.format_exc())
         
     def convert_to_tif(self, job: JobDefinition):
         
@@ -155,6 +157,9 @@ class Window(QWidget):
 
         sort_box = self._get_sort_box()
         right_column.addWidget(sort_box)
+
+        ocr_widget = self._get_ocr_widget()
+        right_column.addWidget(ocr_widget)
 
         denoise_widget = self._get_denoise_widget()
         right_column.addWidget(denoise_widget)
@@ -287,6 +292,11 @@ class Window(QWidget):
         self.denoise_checkbox = QCheckBox("Flecken entfernen (sehr langsam)")
         return self.denoise_checkbox
 
+    def _get_ocr_widget(self):
+        
+        self.ocr_checkbox = QCheckBox("Texterkennung ausführen")
+        return self.ocr_checkbox
+
     def _get_sort_box(self):
         
         sort_box = QGroupBox("Teilen und sortieren")
@@ -410,6 +420,7 @@ class Window(QWidget):
             job_definition.rotation = self._get_rotation()
             job_definition.autorotation = False
         job_definition.denoise = self.denoise_checkbox.isChecked()
+        job_definition.ocr = self.ocr_checkbox.isChecked()
         return job_definition
     
     def _get_sorting(self):

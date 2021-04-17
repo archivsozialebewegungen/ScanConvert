@@ -95,6 +95,7 @@ class JobDefinition:
         self.rotation = 0
         self.autorotation = False
         self.denoise = False
+        self.ocr = False
 
 @singleton
 class FormatConversionService(object):
