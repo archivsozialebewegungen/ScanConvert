@@ -12,6 +12,10 @@ from Asb.ScanConverter.ImageTypeConversion import pil_to_ndarray
 import pytesseract
 from injector import singleton, inject
 from Asb.ScanConverter.ImageStatistics import ImageStatistics
+from enchant.checker import SpellChecker
+import torch
+from pytorch_pretrained_bert import BertTokenizer, BertForMaskedLM
+from difflib import SequenceMatcher
 
 @singleton
 class OcrPreprocessor:
@@ -91,6 +95,10 @@ class OcrPreprocessor:
 class OcrPostprocessor:
     
     @inject
+    def __init__(self):
+        
+        self._tokenizer = None
+        
     def postprocess(self, text:str) -> str:
 
         text = self.remove_hyphenation(text)
@@ -100,7 +108,91 @@ class OcrPostprocessor:
     def remove_hyphenation(self, text: str) -> str:
         
         return re.sub("(?<=\w)-\s+", '', text, flags=re.DOTALL)
+    
+    def fix_word_via_spellchecker_and_bert(self, text: str) -> str:
+        
+        suggested_corrections = self.get_suggested_corrections(text)
+        # replace incorrect words with [MASK]
+        for word in suggested_corrections.keys():
+            text = text.replace(word, '[MASK]')
 
+        tokenized_text = self.tokenizer.tokenize(text)
+        indexed_tokens = self.tokenizer.convert_tokens_to_ids(tokenized_text)
+        maskids = [i for i, e in enumerate(tokenized_text) if e == '[MASK]']
+
+        # Create the segments tensors
+        segs = [i for i, e in enumerate(tokenized_text) if e == "."]
+        segments_ids=[]
+        prev=-1
+        for k, s in enumerate(segs):
+            segments_ids = segments_ids + [k] * (s-prev)
+            prev=s
+        trailing = len(tokenized_text) - len(segments_ids)
+        last_id = len(segs)
+        segments_ids = segments_ids + [last_id] * trailing
+         
+        segments_tensors = torch.tensor([segments_ids])
+        # prepare Torch inputs 
+        tokens_tensor = torch.tensor([indexed_tokens])
+        # Load pre-trained model
+        model = BertForMaskedLM.from_pretrained('bert-base-multilingual-cased')
+        # Predict all tokens
+        with torch.no_grad():
+            predictions = model(tokens_tensor, segments_tensors)
+        
+        return self.predict_words(text, predictions, suggested_corrections, maskids)
+        
+    def get_suggested_corrections(self, text: str):
+
+        preprocessed = self.preprocess_text(text)
+
+        spell_checker = SpellChecker("de_DE")
+        words = preprocessed.split()
+        
+        suggestions = {}
+        for word in words:
+            if not spell_checker.check(word):
+                suggestions[word] = spell_checker.suggest(word)
+                
+        return suggestions
+    
+    def predict_words(self, text_original, predictions, suggestedwords, maskids):
+        
+        for i in range(len(maskids)):
+            preds = torch.topk(predictions[0, maskids[i]], k=50) 
+            indices = preds.indices.tolist()
+            list1 = self.tokenizer.convert_ids_to_tokens(indices)
+            list2 = suggestedwords[i]
+            simmax=0
+            predicted_token=''
+            for word1 in list1:
+                for word2 in list2:
+                    s = SequenceMatcher(None, word1, word2).ratio()
+                    if s is not None and s > simmax:
+                        simmax = s
+                        predicted_token = word1
+            text_original = text_original.replace('[MASK]', predicted_token, 1)
+        return text_original
+
+    def preprocess_text(self, text: str) -> str:
+
+        whitespace_pattern = re.compile("\s+", re.DOTALL)
+        text = whitespace_pattern.sub(" ", text)
+        
+        punctuation_pattern = re.compile("\s*([.,:!\-()*\"'])\s*")
+        text = punctuation_pattern.sub(r" \1 ", text)
+        
+        return text
+
+    def _get_tokenizer(self):
+        
+        if self._tokenizer is None:
+            self._tokenizer = BertTokenizer.from_pretrained('bert-base-multilingual-cased', do_lower_case=False)
+            
+        return self._tokenizer
+
+
+    tokenizer = property(_get_tokenizer)
 @singleton
 class OcrRunner:
     
