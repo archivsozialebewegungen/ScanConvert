@@ -63,7 +63,7 @@ class TaskManager():
         
         for info in job.fileinfos:
             img = self.format_conversion_service.load_image(info)
-            img, info = self.format_conversion_service.perform_changes(img, info, job)
+            img, info, job = self.format_conversion_service.perform_changes(img, info, job)
             if job.split:
                 self.format_conversion_service.save_as_tif(self.format_conversion_service.split_image(img), info)
             else:
@@ -142,15 +142,15 @@ class Window(QWidget):
         
         right_column.addWidget(QLabel("Aufgabe:"))
         self.task_select = QComboBox()
-        self.task_select.addItem(TASK_CONVERT_JPEG)
         self.task_select.addItem(TASK_COLLATE_TO_PDF)
+        self.task_select.addItem(TASK_CONVERT_JPEG)
         right_column.addWidget(self.task_select)
         
         res_box = self._get_resolution_box()
         right_column.addWidget(res_box)
         
         rotate_box = self._get_rotate_box()
-        right_column.addWidget(rotate_box)
+        right_column.addLayout(rotate_box)
         
         modus_box = self._get_modus_box()
         right_column.addWidget(modus_box)
@@ -197,6 +197,8 @@ class Window(QWidget):
         return res_box
 
     def _get_rotate_box(self):
+        
+        complete_box = QVBoxLayout()
                     
         rotate_box = QGroupBox("Drehen")
         rotate_layout = QHBoxLayout()
@@ -218,8 +220,12 @@ class Window(QWidget):
         rotate_group.addButton(self.rotate_270)
         rotate_group.addButton(self.rotate_auto)
         rotate_box.setLayout(rotate_layout)
+        complete_box.addWidget(rotate_box)
+
+        self.rotate_alternating_checkbox = QCheckBox("alternierend")
+        complete_box.addWidget(self.rotate_alternating_checkbox)
     
-        return rotate_box
+        return complete_box
 
     def _get_modus_box(self):
         
@@ -419,6 +425,9 @@ class Window(QWidget):
         else:
             job_definition.rotation = self._get_rotation()
             job_definition.autorotation = False
+            if self.rotate_alternating_checkbox.isChecked():
+                job_definition.alternating_rotation = True
+        
         job_definition.denoise = self.denoise_checkbox.isChecked()
         job_definition.ocr = self.ocr_checkbox.isChecked()
         return job_definition

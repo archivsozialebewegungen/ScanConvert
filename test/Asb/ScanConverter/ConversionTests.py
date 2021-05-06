@@ -21,7 +21,7 @@ class ConversionTest(unittest.TestCase):
         # This is a color, 600 dpi image
         self.color = self.ops.load_image(os.path.join("Images", "RoterStern2.jpg"))
         self.gray = self.ops.load_image(os.path.join("Images", "Image1.png"))
-        self.bw = self.ops.binarization_otsu(self.gray)
+        self.bw = self.ops.binarization_sauvola(self.gray)
         
         self.images = ((self.color, 600), (self.gray, 300), (self.bw, 300))
 

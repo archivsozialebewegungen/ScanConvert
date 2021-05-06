@@ -11,6 +11,7 @@ from injector import singleton, inject
 
 from Asb.ScanConverter.ImageDetection import Detectron2ImageDetectionService
 from Asb.ScanConverter.ImageOperations import ImageFileOperations, MissingResolutionInfo
+from Asb.ScanConverter.Ocr.Denoiser import DenoiseService
 
 
 Image.MAX_IMAGE_PIXELS = None
@@ -93,7 +94,9 @@ class JobDefinition:
         self.split = False
         self.sort = None
         self.rotation = 0
+        self.last_rotation = None
         self.autorotation = False
+        self.alternating_rotation = False
         self.denoise = False
         self.ocr = False
 
@@ -103,20 +106,24 @@ class FormatConversionService(object):
     classdocs
     '''
     
+    alternations = {0: 180, 180: 0, 90: 270, 270:90}
+    
     @inject
     def __init__(self, image_detection_service: Detectron2ImageDetectionService,
-                 image_file_operations: ImageFileOperations):
+                 image_file_operations: ImageFileOperations,
+                 denoiser: DenoiseService):
         
         self.image_detection_service = image_detection_service
         self.image_file_operations = image_file_operations
+        self.denoiser = denoiser
 
     def perform_changes(self, img: Image, fileinfo: GraphicFileInfo, params: JobDefinition):
         
         #img = self.enhance_contrast(img)
         img, fileinfo = self.change_resolution(img, fileinfo, params)
         img, fileinfo = self.change_mode(img, fileinfo, params)
-        img, fileinfo = self.rotate(img, fileinfo, params)
-        return img, fileinfo
+        img, fileinfo, params = self.rotate(img, fileinfo, params)
+        return img, fileinfo, params
 
     def load_image(self, fileinfo: GraphicFileInfo):
         
@@ -131,7 +138,7 @@ class FormatConversionService(object):
             # The image is already BW, so no mode change may occur,
             # but perhaps we have to denoise
             if job_definition.denoise:
-                return self.image_file_operations.denoise(img), fileinfo
+                return self.denoiser.denoise(img), fileinfo
             else:
                 return img, fileinfo
         
@@ -152,19 +159,23 @@ class FormatConversionService(object):
         else:
             return img, fileinfo
     
-    def rotate(self, img: Image, fileinfo: GraphicFileInfo, params: JobDefinition):
+    def rotate(self, img: Image, fileinfo: GraphicFileInfo, job_definition: JobDefinition):
         
-        if params.rotation == 0 and not params.autorotation:
-            return img, fileinfo
+        if job_definition.rotation == 0 and not job_definition.autorotation:
+            return img, fileinfo, job_definition
         
-        angle = params.rotation
-        if params.autorotation:
+        angle = job_definition.rotation
+        if job_definition.autorotation:
             angle = self.image_file_operations.detect_rotation_angle(img)
-            print("Angle is: %d" % angle)
+        if job_definition.alternating_rotation:
+            if job_definition.last_rotation is not None:
+                angle = self.alternations[job_definition.last_rotation]
+            job_definition.last_rotation = angle
+        print("Angle is: %d" % angle)
         rotated = self.image_file_operations.rotate(img, angle)
         fileinfo.update(rotated)
         
-        return rotated, fileinfo
+        return rotated, fileinfo, job_definition
     
     def change_resolution(self, img: Image, fileinfo: GraphicFileInfo, params: JobDefinition):
         
@@ -194,7 +205,7 @@ class FormatConversionService(object):
             return self._binarization_mixed(img, params)
         
         if params.denoise:
-            return self.image_file_operations.denoise(new_image)
+            return self.denoiser.denoise(new_image)
         else:
             return new_image
 
@@ -205,7 +216,7 @@ class FormatConversionService(object):
         text_background = self.image_file_operations.isolate_text(text_background)
         text_background = self.image_file_operations.binarization_sauvola(text_background)
         if job_definition.denoise:
-            text_background = self.image_file_operations.denoise(text_background)
+            text_background = self.denoiser.denoise(text_background)
             
         for (x1, y1, photo) in meta_img.get_photos():
             text_background.paste(photo, (x1, y1))

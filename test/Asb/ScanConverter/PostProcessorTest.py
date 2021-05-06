@@ -18,26 +18,17 @@ class PostProcessorTest(unittest.TestCase):
     def tearDown(self):
         pass
 
-    def testPreprocessText(self):
+    def testRemoveHyphenation(self):
 
-        text = """Dies-ist ein, mit  
-        Satzzeichen gespickter Text!
-        """
+        text = """Frau Müller-
+        Eisele, die mitt-
+        wochs ins Büro kommt. 3 -
+        1 = 2"""
         
-        self.assertEqual('Dies - ist ein , mit Satzzeichen gespickter Text ! ',
-                         self.post_processor.preprocess_text(text))
-        
-        
-        
-    def testSpellcheckerFix(self):
-        
-        text = "Meine Oma fährt im Huhnerstall Motorrad."
-        
-        self.assertEquals("Meine Oma fährt im Hühnerstall Motorrad.",
-                          self.post_processor.fix_word_via_spellchecker_and_bert(text))
+        self.assertEqual('Frau Müller-Eisele, die mittwochs ins Büro kommt. 3 - 1 = 2',
+                         self.post_processor.postprocess(text))
         
         
-
 
 if __name__ == "__main__":
     #import sys;sys.argv = ['', 'Test.testName']

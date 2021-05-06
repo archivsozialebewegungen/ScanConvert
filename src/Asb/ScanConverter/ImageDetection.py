@@ -110,7 +110,8 @@ class Detectron2ImageDetectionService(object):
         if img.mode == "1":
             color_image = img.convert("RGB")
         else:
-            color_image = self.img_ops.binarization_otsu(img).convert("RGB")
+            bw_img = self.img_ops.binarization_sauvola(img)
+            color_image = bw_img.convert("RGB")
 
         cv2_image = pil_to_native_cv2image(color_image)
         model = layoutparser.Detectron2LayoutModel(

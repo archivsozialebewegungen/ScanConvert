@@ -12,7 +12,7 @@ from Asb.ScanConverter.Ocr.OCR import OcrRunner, OcrPreprocessor,\
     OcrPostprocessor
 from Asb.ScanConverter.ImageOperations import ImageFileOperations
 from Asb.ScanConverter.Ocr.Scoring import OCRScorer
-from Asb.ScanConverter.Ocr.GoogleVision import GoogleVisionApiJsonReader
+#from Asb.ScanConverter.Ocr.GoogleVision import GoogleVisionApiJsonReader
 from Asb.ScanConverter.DeveloperTools import DeveloperTools
 from Asb.ScanConverter.Ocr.Alto import AltoPageLayout
 from Asb.ScanConverter.ImageStatistics import ImageStatistics
@@ -73,10 +73,10 @@ class OCRServiceTest(unittest.TestCase):
                 else:
                     expected = "Empty"
                     
-                if os.path.exists(google_vision_name):
-                    json_reader = GoogleVisionApiJsonReader(google_vision_name)
-                else:
-                    json_reader = None
+                #if os.path.exists(google_vision_name):
+                #    json_reader = GoogleVisionApiJsonReader(google_vision_name)
+                #else:
+                #    json_reader = None
 
                 img = Image.open(os.path.join("Images", params["imagefile"]))
 
@@ -98,10 +98,10 @@ class OCRServiceTest(unittest.TestCase):
         
                 score = self.scorer.scoreResults(expected, computed)
                 print(score)
-                if os.path.exists(google_vision_name):
-                    json_reader = GoogleVisionApiJsonReader(google_vision_name)
-                    google_score = self.scorer.scoreResults(expected, json_reader.get_text())
-                    print("Google vision score: %s" % google_score)
+                #if os.path.exists(google_vision_name):
+                #    json_reader = GoogleVisionApiJsonReader(google_vision_name)
+                #    google_score = self.scorer.scoreResults(expected, json_reader.get_text())
+                #    print("Google vision score: %s" % google_score)
 
                 alto_layout = AltoPageLayout(img)
                 print("Tesseract confidentiality: %f" % alto_layout._get_confidence())

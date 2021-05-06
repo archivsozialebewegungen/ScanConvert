@@ -25,7 +25,8 @@ def pil_to_ndarray(img: Image) -> ndarray:
 def ndarray_to_pil(ndarray: ndarray, resolution: (int,)) -> Image:
     
     img = Image.fromarray(ndarray)
-    img.info['dpi'] = resolution
+    if resolution is not None:
+        img.info['dpi'] = resolution
     return img
 
 def pil_to_rgb_cv2image(img: Image):

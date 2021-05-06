@@ -41,7 +41,7 @@ class ImageDetectionTest(unittest.TestCase):
     def testCreateMask(self):
 
         service = Detectron2ImageDetectionService()
-        bw_image = self.image_file_operations.binarization_otsu(self.img[0])
+        bw_image = self.image_file_operations.binarization_sauvola(self.img[0])
         meta_image = service.get_illustration_meta_image(bw_image)
         mask = meta_image.get_illustration_mask()
         self.dev_tools.show_image(mask, "Mask")

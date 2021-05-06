@@ -25,7 +25,10 @@ INVISIBLE = 3
 class PdfService:
     
     @inject
-    def __init__(self, format_conversion_service: FormatConversionService, image_operations: ImageFileOperations, ocr_runner: OcrRunner):
+    def __init__(self,
+                 format_conversion_service: FormatConversionService, 
+                 image_operations: ImageFileOperations,
+                 ocr_runner: OcrRunner):
         
         self.format_conversion_service = format_conversion_service
         self.image_ops = image_operations
@@ -79,7 +82,7 @@ class PdfService:
         for image_info in infos:
             img = self.image_ops.load_image(image_info.filepath)
 
-            converted_img, image_info = self.format_conversion_service.perform_changes(img, image_info, job)
+            converted_img, image_info, job = self.format_conversion_service.perform_changes(img, image_info, job)
             
             if job.split: 
                 page_images = self.image_ops.split_image(converted_img)
@@ -102,7 +105,7 @@ class PdfService:
         
         raise Exception("Unknown sorting request")
     
-    def sort_images_first_pages(self, images):
+    def sort_images_first_page(self, images):
         
         first = images[0]
         del(images[0])
