@@ -18,6 +18,11 @@ from lxml import etree, html
 from injector import singleton, inject
 from reportlab.lib.utils import ImageReader
 import io
+import tempfile
+import ocrmypdf
+import os
+from ocrmypdf.api import Verbosity
+import shutil
 
 INVISIBLE = 3
 
@@ -76,6 +81,19 @@ class PdfService:
         
         pdf.save()
         
+        if job.pdfa:
+            self._convert_to_pdfa(job)
+    
+    def _convert_to_pdfa(self, job: JobDefinition):
+        
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            
+            ocrmypdf.configure_logging(Verbosity(1))
+            tmpfile = os.path.join(tmp_dir, 'tmp.pdf')
+            ocrmypdf.ocr(job.output_path, tmpfile, skip_text=True)
+            shutil.copy(tmpfile, job.output_path)
+            
+    
     def collect_and_convert_images(self, infos, job: JobDefinition):
 
         images = []        

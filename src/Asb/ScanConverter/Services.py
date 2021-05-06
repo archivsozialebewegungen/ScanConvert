@@ -98,6 +98,7 @@ class JobDefinition:
         self.autorotation = False
         self.alternating_rotation = False
         self.denoise = False
+        self.pdfa = False
         self.ocr = False
 
 @singleton

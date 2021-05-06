@@ -164,6 +164,9 @@ class Window(QWidget):
         denoise_widget = self._get_denoise_widget()
         right_column.addWidget(denoise_widget)
 
+        pdfa_widget = self._get_pdfa_widget()
+        right_column.addWidget(pdfa_widget)
+
         run_button = QPushButton("Aufgabe ausführen")
         run_button.clicked.connect(self.add_task)
         right_column.addWidget(run_button)
@@ -298,6 +301,11 @@ class Window(QWidget):
         self.denoise_checkbox = QCheckBox("Flecken entfernen (sehr langsam)")
         return self.denoise_checkbox
 
+    def _get_pdfa_widget(self):
+        
+        self.pdfa_checkbox = QCheckBox("Graphiken optimieren und PDF/A erstellen")
+        return self.pdfa_checkbox
+
     def _get_ocr_widget(self):
         
         self.ocr_checkbox = QCheckBox("Texterkennung ausführen")
@@ -429,6 +437,7 @@ class Window(QWidget):
                 job_definition.alternating_rotation = True
         
         job_definition.denoise = self.denoise_checkbox.isChecked()
+        job_definition.pdfa = self.pdfa_checkbox.isChecked()
         job_definition.ocr = self.ocr_checkbox.isChecked()
         return job_definition
     
