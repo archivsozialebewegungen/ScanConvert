@@ -14,7 +14,7 @@ from injector import Injector, inject, singleton
 
 from Asb.ScanConverter.Services import FormatConversionService, GraphicFileInfo, \
     JobDefinition, GRAYSCALE, BLACK_AND_WHITE, FLOYD_STEINBERG, THRESHOLD, \
-    SAUVOLA, MIXED
+    SAUVOLA
 from Asb.ScanConverter.Ocr.PdfService import PdfService
 import traceback
 
@@ -256,7 +256,6 @@ class Window(QWidget):
         self.bw_algo_select.addItem(SAUVOLA)
         self.bw_algo_select.addItem(FLOYD_STEINBERG)
         self.bw_algo_select.addItem(THRESHOLD)
-        self.bw_algo_select.addItem(MIXED)
         self.bw_algo_select.currentIndexChanged.connect(self.bw_algo_changed)
         modus_layout.addWidget(self.bw_algo_select)
         

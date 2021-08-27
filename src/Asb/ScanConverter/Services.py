@@ -3,16 +3,12 @@ Created on 16.02.2021
 
 @author: michael
 '''
+from PIL import Image, ImageOps
 import os
-import tempfile
-
-from PIL import Image, ImageOps, ImageEnhance
 from injector import singleton, inject
-
-from Asb.ScanConverter.ImageDetection import Detectron2ImageDetectionService
-from Asb.ScanConverter.ImageOperations import ImageFileOperations, MissingResolutionInfo
+from Asb.ScanConverter.ImageOperations import ImageFileOperations,\
+    MissingResolutionInfo
 from Asb.ScanConverter.Ocr.Denoiser import DenoiseService
-
 
 Image.MAX_IMAGE_PIXELS = None
 
@@ -22,10 +18,9 @@ COLOR = "Farbe"
 COLOR_WITH_ALPHA = "Farbe mit Transparenz"
 INDEX = "Indexiert"
 
-FLOYD_STEINBERG = "Bilder optimal"
+FLOYD_STEINBERG = "Nur Bilder"
 THRESHOLD = "Schwellwert"
 SAUVOLA = "Text optimal"
-MIXED = "Alles optimal (experimentell)"
 
 class GraphicFileInfo:
     
@@ -110,11 +105,9 @@ class FormatConversionService(object):
     alternations = {0: 180, 180: 0, 90: 270, 270:90}
     
     @inject
-    def __init__(self, image_detection_service: Detectron2ImageDetectionService,
-                 image_file_operations: ImageFileOperations,
+    def __init__(self, image_file_operations: ImageFileOperations,
                  denoiser: DenoiseService):
         
-        self.image_detection_service = image_detection_service
         self.image_file_operations = image_file_operations
         self.denoiser = denoiser
 
@@ -172,7 +165,6 @@ class FormatConversionService(object):
             if job_definition.last_rotation is not None:
                 angle = self.alternations[job_definition.last_rotation]
             job_definition.last_rotation = angle
-        print("Angle is: %d" % angle)
         rotated = self.image_file_operations.rotate(img, angle)
         fileinfo.update(rotated)
         
@@ -201,41 +193,11 @@ class FormatConversionService(object):
             new_image = self.image_file_operations.binarization_fixed(img, params.threshold_value)
         if params.binarization_algorithm == SAUVOLA:
             new_image = self.image_file_operations.binarization_sauvola(img)
-        if params.binarization_algorithm == MIXED:
-            # Denoising occurs within mixed binarization if requested
-            return self._binarization_mixed(img, params)
         
         if params.denoise:
             return self.denoiser.denoise(new_image)
         else:
             return new_image
-
-    def _binarization_mixed(self, img, job_definition: JobDefinition):
-        
-        meta_img = self.image_detection_service.get_illustration_meta_image(img)
-        text_background = meta_img.get_img_without_illustrations()
-        text_background = self.image_file_operations.isolate_text(text_background)
-        text_background = self.image_file_operations.binarization_sauvola(text_background)
-        if job_definition.denoise:
-            text_background = self.denoiser.denoise(text_background)
-            
-        for (x1, y1, photo) in meta_img.get_photos():
-            text_background.paste(photo, (x1, y1))
-        for (x1, y1, drawing) in meta_img.get_drawings():
-            text_background.paste(self.image_file_operations.binarization_otsu(drawing), (x1, y1))
-
-        return text_background
-
-    def _enhance_photo(self, img: Image) -> Image:
-        
-        return ImageEnhance.Contrast(img).enhance(1.3)
-    
-    def _enhance_drawing(self, img: Image) -> Image:
-    
-        return img
-        #enhanced_img = ImageEnhance.Contrast(img).enhance(1.3)
-        #return Image.fromarray(exposure.equalize_adapthist(pil_to_skimage(enhanced_img)))
-    
 
     def split_image(self, img: Image):
         
@@ -257,70 +219,3 @@ class FormatConversionService(object):
             for i in range(1, len(images) + 1):
                 new_filepath = "%s%0.3d.tif" % (filebase, i)
                 self.image_file_operations.save_image(images[i-1], new_filepath)
-
-        
-@singleton
-class PdfServiceOld:
-    '''
-    This uses tiff tools and ocrmypdf to generate pdfs, the new
-    service does not need external tools.
-    '''
-    
-    @inject
-    def __init__(self, format_conversion_service: FormatConversionService):
-        
-        self.format_conversion_service = format_conversion_service
-        
-        
-    def create_pdf_file(self, job: JobDefinition):
-        
-        with tempfile.TemporaryDirectory() as tmpdir:
-            filenames = []
-            for index in range(0, len(job.fileinfos)):
-                fileinfo = job.fileinfos[index]
-                img = self.format_conversion_service.load_image(fileinfo)
-                img, fileinfo = self.format_conversion_service.perform_changes(img, fileinfo, job)
-                if job.split:
-                    images = self.format_conversion_service.split_image(img)
-                else:
-                    images = (img,)
-                for subindex in range(0, len(images)):
-                    filename = os.path.join(tmpdir, "%0.3d%0.3d.tif" % (index, subindex))
-                    filenames.append(filename)
-                    images[subindex].save(filename, compression="tiff_lzw", dpi=fileinfo.info['dpi'])
-
-            filenames = self.sort_filenames(filenames, job)
-            
-            tiffoutput = os.path.join(tmpdir, "out.tif")
-            pdfoutput = os.path.join(tmpdir, "out.pdf")
-            cmd = "tiffcp %s %s" % (" ".join(filenames), tiffoutput)
-            print(cmd)
-            os.system(cmd)
-            cmd = "tiff2pdf -z -o %s %s" % (pdfoutput, tiffoutput)
-            print(cmd)
-            os.system(cmd)
-            cmd = "ocrmypdf -l deu %s %s" % (pdfoutput, job.output_path)
-            print(cmd)
-            os.system(cmd)
-
-    def sort_filenames(self, filenames, params: JobDefinition):
-        
-            if params.sort == JobDefinition.SORT_FIRST_PAGE:
-                first = filenames[0]
-                del(filenames[0])
-                filenames.append(first)
-                return filenames
-                
-            if params.sort == JobDefinition.SORT_SHEETS:
-                filenumbers = []
-                for bogen in range(0, int(len(filenames) / 4)):
-                    filenumbers.append(len(filenames) - (bogen * 2 + 1))
-                    filenumbers.append(0 + bogen * 2)
-                    filenumbers.append(1 + bogen * 2)
-                    filenumbers.append(len(filenames) - (bogen * 2 + 2))
-                new_filenames = [''] * len(filenames)
-                for i in range(0, len(filenumbers)):
-                    new_filenames[filenumbers[i]] = filenames[i]
-                return new_filenames
-    
-            return filenames

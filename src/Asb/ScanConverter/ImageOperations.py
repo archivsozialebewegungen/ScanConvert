@@ -201,6 +201,20 @@ class ImageFileOperations:
             resolution = None
         return ndarray_to_pil(out_array, resolution)
     
+    def binarization_otsu(self, img) -> Image:
+        '''
+        Wrapper around the cv2 implementation
+        '''
+
+        in_array = numpy.array(self.convert_to_gray(img))
+        mask = threshold_otsu(in_array)
+        out_array = in_array > mask
+        try:
+            resolution = self.get_resolution(img)
+        except:
+            resolution = None
+        return ndarray_to_pil(out_array, resolution)
+    
     def convert_to_gray(self, img: Image) -> Image:
         '''
         Simple wrapper around the PIL conversion routine.

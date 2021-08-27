@@ -13,33 +13,32 @@ import pytesseract
 from injector import singleton, inject
 from Asb.ScanConverter.ImageStatistics import ImageStatistics
 from enchant.checker import SpellChecker
-import torch
-from transformers import BertTokenizer, BertModel
-import Levenshtein
+from Asb.ScanConverter.Ocr.Filter import FilterChainGenerator
+from Asb.ScanConverter.Services import GraphicFileInfo
 
 @singleton
 class OcrPreprocessor:
     
     @inject
-    def __init__(self, image_operations: ImageFileOperations,
-                 image_statistics: ImageStatistics):
+    def __init__(self, filter_chain_generator: FilterChainGenerator):
         
-        self.image_operations = image_operations
-        self.image_statistics = image_statistics
+        self.filter_chain_generator = filter_chain_generator
     
     def preprocess(self, img: Image) -> Image:
         
+        filter_chain = self.filter_chain_generator.generate_filter_chain(img)
+        return filter_chain.apply(img)
         #if self.needs_more_contrast(img):
         #    img = self.image_operations.enhance_contrast(img)
         #    img = self.image_operations.apply_dilation(img)
         #if self.image_statistics.advice_sharpening(img):
         #    img = self.image_operations.sharpen(img)
-        img = img.convert('L')
-        img = self.image_operations.binarization_sauvola(img)
+        #img = img.convert('L')
+        #img = self.image_operations.binarization_sauvola(img)
         # At the moment denoising produces more harm with vanishing dots
         # than that it helps OCR
         #img = self.image_operations.denoise(img)
-        return img
+        #return img
 
     def try_normalization(self, img: Image):
         
