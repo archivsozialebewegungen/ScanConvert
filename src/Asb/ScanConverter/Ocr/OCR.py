@@ -12,7 +12,6 @@ from Asb.ScanConverter.ImageTypeConversion import pil_to_ndarray
 import pytesseract
 from injector import singleton, inject
 from Asb.ScanConverter.ImageStatistics import ImageStatistics
-from enchant.checker import SpellChecker
 from Asb.ScanConverter.Ocr.Filter import FilterChainGenerator
 from Asb.ScanConverter.Services import GraphicFileInfo
 
