@@ -74,7 +74,7 @@ class PdfService:
             
             if job.ocr:
                 #alto_layout = self.ocr_runner.get_alto_layout(img)
-                hocr_layout = self.ocr_runner.get_hocr(image)
+                hocr_layout = self.ocr_runner.get_hocr(image, language="fra")
                 self.add_text_layer_from_hocr(pdf, hocr_layout, page_height, dpi)
 
             pdf.showPage()
