@@ -14,9 +14,11 @@ from injector import Injector, inject, singleton
 
 from Asb.ScanConverter.Services import FormatConversionService, GraphicFileInfo, \
     JobDefinition, GRAYSCALE, BLACK_AND_WHITE, FLOYD_STEINBERG, THRESHOLD, \
-    SAUVOLA
+    SAUVOLA, ModeChangeDefinition
 from Asb.ScanConverter.Ocr.PdfService import PdfService
 import traceback
+from email.policy import default
+from copy import deepcopy
 
 
 TASK_CONVERT_JPEG = "Jpegs nach tif konvertieren"
@@ -89,13 +91,19 @@ class Window(QWidget):
     @inject
     def __init__(self, task_manager: TaskManager):
         super().__init__()
+        self.single_file_mode = False
+        self.mode_change_active = True
+        
+        self.job_definition = JobDefinition()
+
         self.task_manager = task_manager
         self.createWidgets()
         self.task_manager.message_function = self.show_job_status
         self.show_job_status()
-        self.setGeometry(400, 400, 300, 300)
+        self.setGeometry(100, 100, 300, 300)
         self.setWindowTitle("Scan-Kovertierer")
         self.fileinfos = []
+        
 
     def show_job_status(self):
         
@@ -125,12 +133,36 @@ class Window(QWidget):
     def _get_file_list_widget(self):
 
         self.file_list = QTableWidget()
-        self.file_list.setGeometry(400, 400, 300, 300)
+        self.file_list.setGeometry(400, 400, 600, 300)
         self.file_list.setColumnCount(4)
         self.file_list.setHorizontalHeaderLabels(["Datei", "Modus", "Auflösung", "Format"])
         self.file_list.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.file_list.itemClicked.connect(self._file_clicked)
         
         return self.file_list
+    
+    def _is_exactly_one_row_selected(self):
+
+        currently_selected_items = 0
+        for row_no in range(0, self.file_list.rowCount()):
+            if self.file_list.item(row_no, 0).isSelected():
+                currently_selected_items += 1
+        return currently_selected_items == 1
+
+    def _get_first_selected_file_info(self):
+
+        fileinfo = None
+        for row_no in range(0, self.file_list.rowCount()):
+            if self.file_list.item(row_no, 0).isSelected():
+                if fileinfo is None:
+                    fileinfo = self.fileinfos[row_no] 
+                else:
+                    raise Exception("More than one file selected!")
+        
+        if fileinfo is None:    
+            raise Exception("No file selected!")
+        
+        return fileinfo
 
     def createWidgets(self):
         
@@ -183,18 +215,22 @@ class Window(QWidget):
     def _get_resolution_box(self):
         
         res_box = QGroupBox("Auflösungsänderung")
-        res_layout = QHBoxLayout()
+        res_layout = QVBoxLayout()
+        res_layout_1 = QHBoxLayout()
         resolution_group = QButtonGroup(self)
         self.resolution_no = QRadioButton("keine", self)
         self.resolution_300 = QRadioButton("300 dpi", self)
         self.resolution_400 = QRadioButton("400 dpi", self)
         self.resolution_no.setChecked(True)
-        res_layout.addWidget(self.resolution_no)
-        res_layout.addWidget(self.resolution_300)
-        res_layout.addWidget(self.resolution_400)
+        res_layout_1.addWidget(self.resolution_no)
+        res_layout_1.addWidget(self.resolution_300)
+        res_layout_1.addWidget(self.resolution_400)
         resolution_group.addButton(self.resolution_no)
         resolution_group.addButton(self.resolution_300)
         resolution_group.addButton(self.resolution_400)
+        res_layout.addLayout(res_layout_1)
+        self.correct_res_only_checkbox = QCheckBox("Auflösung nur korrigieren", self)
+        res_layout.addWidget(self.correct_res_only_checkbox)
         res_box.setLayout(res_layout)
         
         return res_box
@@ -232,54 +268,56 @@ class Window(QWidget):
 
     def _get_modus_box(self):
         
-        modus_box = QGroupBox("Modusänderung")
-        modus_layout = QVBoxLayout()
+        self.modus_box = QGroupBox("Modusänderung")
+        self.modus_layout = QVBoxLayout()
         
         modus_buttonlayout = QHBoxLayout()
-        modus_group = QButtonGroup(self)
+        self.modus_group = QButtonGroup(self)
         self.modus_no = QRadioButton("Keine", self)
-        self.modus_no.clicked.connect(self.de_activate_bw_algo)
+        self.modus_no.clicked.connect(self.toggle_bw_algo_activation)
         self.modus_gray = QRadioButton("Grau", self)
-        self.modus_gray.clicked.connect(self.de_activate_bw_algo)
+        self.modus_gray.clicked.connect(self.toggle_bw_algo_activation)
         self.modus_bw = QRadioButton("S/W", self)
-        self.modus_bw.clicked.connect(self.de_activate_bw_algo)
+        self.modus_bw.clicked.connect(self.toggle_bw_algo_activation)
         self.modus_no.setChecked(True)
         modus_buttonlayout.addWidget(self.modus_no)
         modus_buttonlayout.addWidget(self.modus_gray)
         modus_buttonlayout.addWidget(self.modus_bw)
-        modus_group.addButton(self.modus_no)
-        modus_group.addButton(self.modus_gray)
-        modus_group.addButton(self.modus_bw)
-        modus_layout.addLayout(modus_buttonlayout)
+        self.modus_group.addButton(self.modus_no)
+        self.modus_group.addButton(self.modus_gray)
+        self.modus_group.addButton(self.modus_bw)
+        self.modus_layout.addLayout(modus_buttonlayout)
         
         self.bw_algo_select = QComboBox()
         self.bw_algo_select.addItem(SAUVOLA)
         self.bw_algo_select.addItem(FLOYD_STEINBERG)
         self.bw_algo_select.addItem(THRESHOLD)
         self.bw_algo_select.currentIndexChanged.connect(self.bw_algo_changed)
-        modus_layout.addWidget(self.bw_algo_select)
+        self.modus_layout.addWidget(self.bw_algo_select)
         
         slider_box = QHBoxLayout()
         self.slider_value = QLabel("127")
         slider_box.addWidget(self.slider_value)
         self.threshold_slider = QSlider(Qt.Horizontal)
-        self.threshold_slider.setValue(127)
         self.threshold_slider.setMaximum(255)
         self.threshold_slider.setMinimum(0)
         self.threshold_slider.setSingleStep(1)
         self.threshold_slider.setTickPosition(QSlider.TicksBelow)
         self.threshold_slider.setTickInterval(20)
-        self.threshold_slider.valueChanged.connect(lambda value: self.slider_value.setText("%s" % value))
+        self.threshold_slider.valueChanged.connect(self.slider_changed)
+        self.threshold_slider.setValue(127)
         slider_box.addWidget(self.threshold_slider)
-        modus_layout.addLayout(slider_box)
+        self.modus_layout.addLayout(slider_box)
         
-        self.de_activate_bw_algo()
+        self.toggle_bw_algo_activation()
         
-        modus_box.setLayout(modus_layout)
+        self.modus_box.setLayout(self.modus_layout)
         
-        return modus_box
+        return self.modus_box
 
-    def de_activate_bw_algo(self):
+    # Here start the signal handler
+
+    def toggle_bw_algo_activation(self):
         
         if self.modus_bw.isChecked():
             self.bw_algo_select.setEnabled(True)
@@ -287,6 +325,8 @@ class Window(QWidget):
         else:
             self.bw_algo_select.setEnabled(False)
             self.threshold_slider.setEnabled(False)
+            
+        self._register_mode_change()
     
     def bw_algo_changed(self, value):
         
@@ -294,6 +334,103 @@ class Window(QWidget):
             self.threshold_slider.setEnabled(True)
         else:
             self.threshold_slider.setDisabled(True)
+            
+        self._register_mode_change()
+        
+    def slider_changed(self, value):
+        
+        self.slider_value.setText("%s" % value)
+        
+        self._register_mode_change()
+    
+    def _file_clicked(self, widgetItem):
+
+        self.mode_change_active = False
+        if self._is_exactly_one_row_selected():
+            self.set_single_file_mode()
+        else:
+            self.restore_default_mode()
+        self.mode_change_active = True
+            
+    def set_single_file_mode(self):
+        
+        self.single_file_mode = True
+        self.modus_box.setStyleSheet("QGroupBox"
+                                     "{"
+                                     "background-color: red;"
+                                     "}")
+        
+        mode_change_definition = self.job_definition.mode_change_definitions['default'] 
+        selected_file_info = self._get_first_selected_file_info()
+        if selected_file_info.filename in self.job_definition.mode_change_definitions:
+            mode_change_definition = self.job_definition.mode_change_definitions[selected_file_info.filename]
+            
+        self.show_current_mode_change_definition(mode_change_definition)   
+            
+            
+    def restore_default_mode(self):
+
+        self.single_file_mode = True
+        if self.single_file_mode:
+            self.modus_box.setStyleSheet("QGroupBox"
+                                     "{"
+                                     "}")
+        self.show_current_mode_change_definition(self.job_definition.mode_change_definitions['default'])   
+
+    def _register_mode_change(self):
+        
+        
+        if not self.mode_change_active:
+            return
+        
+        current_mode_change = self.compile_mode_change()
+
+        if self.single_file_mode:
+            self.update_single_file_mode_change(current_mode_change)
+        else:
+            self.update_default_mode_change(current_mode_change)
+
+    def update_single_file_mode_change(self, current_mode_change: ModeChangeDefinition):
+        
+        if not self._is_exactly_one_row_selected():
+            raise Exception("We are not in single file mode!")
+        
+        selected_file = self._get_first_selected_file_info()
+        default_mode_change = self.job_definition.mode_change_definitions['default']
+        
+        if selected_file.filename in self.job_definition.mode_change_definitions:
+            if current_mode_change == default_mode_change:
+                del self.job_definition.mode_change_definitions[selected_file.filename]
+            else:
+                self.job_definition.mode_change_definitions[selected_file.filename] = current_mode_change
+            return
+        
+        if not default_mode_change == current_mode_change:
+            self.job_definition.mode_change_definitions[selected_file.filename] = current_mode_change
+            
+    def update_default_mode_change(self, current_mode_change: ModeChangeDefinition):
+        
+        if self._is_exactly_one_row_selected():
+            raise Exception("We are in single file mode!")
+
+        self.job_definition.mode_change_definitions['default'] = current_mode_change
+            
+
+    def compile_mode_change(self):
+
+        mode_change_definition = ModeChangeDefinition()
+        mode_change_definition.modus_change = self._get_modus()
+        mode_change_definition.binarization_algorithm = self.bw_algo_select.currentText()
+        mode_change_definition.threshold_value = int(self.threshold_slider.value())
+        return mode_change_definition
+
+    def show_current_mode_change_definition(self, mode_change_definition: ModeChangeDefinition):
+        
+        self._set_modus(mode_change_definition.modus_change)
+        self.threshold_slider.setValue(mode_change_definition.threshold_value)
+        for idx in range(0, self.bw_algo_select.count()):
+            if self.bw_algo_select.itemText(idx) == mode_change_definition.binarization_algorithm:
+                self.bw_algo_select.setCurrentIndex(idx)
 
     def _get_denoise_widget(self):
         
@@ -319,7 +456,7 @@ class Window(QWidget):
         sort_layout.addWidget(self.split_box)
         sort_group = QButtonGroup(self)
         self.sort_no = QRadioButton("Keine Sortierung", self)
-        self.sort_first = QRadioButton("1. Seite as Ende (Overheadscanner)", self)
+        self.sort_first = QRadioButton("1. Seite ans Ende (Overheadscanner)", self)
         self.sort_sheets = QRadioButton("Nach Bögen (Einzugsscanner)", self)
         self.sort_no.setChecked(True)
         sort_layout.addWidget(self.sort_no)
@@ -410,35 +547,36 @@ class Window(QWidget):
                 self.append_fileinfo(GraphicFileInfo(filename))
 
     def compile_job_definition(self):
-        
-        job_definition = JobDefinition()
-        job_definition.task = self.task_select.currentText()
-        job_definition.fileinfos = self.fileinfos.copy()
-        if job_definition.task == TASK_COLLATE_TO_PDF:
+
+        selection_model = self.file_list.selectionModel()
+        selection_model.clearSelection()        
+        self._file_clicked(None)
+
+        self.job_definition.task = self.task_select.currentText()
+        self.job_definition.fileinfos = self.fileinfos.copy()
+        if self.job_definition.task == TASK_COLLATE_TO_PDF:
             dialog = QFileDialog()
             dialog.setNameFilter("Pdf-Dateien (*.pdf)")
             selection = QFileDialog().getSaveFileName()
-            job_definition.output_path = selection[0]
+            self.job_definition.output_path = selection[0]
 
-        job_definition.resolution_change = self._get_resolution()
-        job_definition.modus_change = self._get_modus()
-        job_definition.binarization_algorithm = self.bw_algo_select.currentText()
-        job_definition.threshold_value = int(self.threshold_slider.value())
-        job_definition.split = self.split_box.isChecked()
-        job_definition.sort = self._get_sorting()
+        self.job_definition.resolution_change = self._get_resolution()
+        self.job_definition.correct_res_only = self.correct_res_only_checkbox.isChecked()
+        self.job_definition.split = self.split_box.isChecked()
+        self.job_definition.sort = self._get_sorting()
         if self.rotate_auto.isChecked():
-            job_definition.rotation = 0
-            job_definition.autorotation = True
+            self.job_definition.rotation = 0
+            self.job_definition.autorotation = True
         else:
-            job_definition.rotation = self._get_rotation()
-            job_definition.autorotation = False
+            self.job_definition.rotation = self._get_rotation()
+            self.job_definition.autorotation = False
             if self.rotate_alternating_checkbox.isChecked():
-                job_definition.alternating_rotation = True
+                self.job_definition.alternating_rotation = True
         
-        job_definition.denoise = self.denoise_checkbox.isChecked()
-        job_definition.pdfa = self.pdfa_checkbox.isChecked()
-        job_definition.ocr = self.ocr_checkbox.isChecked()
-        return job_definition
+        self.job_definition.denoise = self.denoise_checkbox.isChecked()
+        self.job_definition.pdfa = self.pdfa_checkbox.isChecked()
+        self.job_definition.ocr = self.ocr_checkbox.isChecked()
+        return deepcopy(self.job_definition)
     
     def _get_sorting(self):
         
@@ -456,6 +594,15 @@ class Window(QWidget):
             return BLACK_AND_WHITE
         return None
     
+    def _set_modus(self, modus):
+        
+        if modus == GRAYSCALE:
+            self.modus_gray.setChecked(True)
+        elif modus == BLACK_AND_WHITE:
+            self.modus_bw.setChecked(True)
+        else:
+            self.modus_no.setChecked(True)
+
     def _get_rotation(self):
 
         if self.rotate_0.isChecked():

@@ -57,6 +57,12 @@ class ImageFileOperations:
         
         return xres, yres
      
+    def set_resolution(self, img: Image, res: int) -> Image:
+        
+        img.info['dpi'] = (res, res)
+
+        return img
+    
     def sharpen(self, img: Image) -> Image:
         
         return img.filter(ImageFilter.SHARPEN)   

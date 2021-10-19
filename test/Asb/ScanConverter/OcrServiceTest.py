@@ -16,6 +16,7 @@ from Asb.ScanConverter.Ocr.Scoring import OCRScorer
 from Asb.ScanConverter.DeveloperTools import DeveloperTools
 from Asb.ScanConverter.Ocr.Alto import AltoPageLayout
 from Asb.ScanConverter.ImageStatistics import ImageStatistics
+from Asb.ScanConverter.Ocr.Filter import FilterChainGenerator
 
 
 class OCRServiceTest(unittest.TestCase):
@@ -27,7 +28,7 @@ class OCRServiceTest(unittest.TestCase):
         self.dev_tools = DeveloperTools()
         self.img_statistics = ImageStatistics()
         self.postprocessor = OcrPostprocessor()
-        self.ocr_service = OcrRunner(OcrPreprocessor(ImageFileOperations(), self.img_statistics), self.postprocessor)
+        self.ocr_service = OcrRunner(OcrPreprocessor(FilterChainGenerator()), self.postprocessor)
         self.scorer = OCRScorer()
 
     test_list = [

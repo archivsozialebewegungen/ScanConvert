@@ -54,8 +54,6 @@ class GraphicFileInfo:
                 return "%s" % dpi[0]
             else:
                 return "%sx%s" % dpi
-        for key in self.info.keys():
-            print(key)
         return "Unbekannt"
     
     def _get_filename(self):
@@ -73,27 +71,44 @@ class GraphicFileInfo:
     filename = property(_get_filename)
     mode = property(_get_mode)
 
+class ModeChangeDefinition:
+    
+    def __init__(self):
+        self.modus_change = None
+        self.binarization_algorithm = SAUVOLA
+        self.threshold_value = 127
+        
+    def __eq__(self, other):
+        
+        return self.modus_change == other.modus_change and \
+            self.binarization_algorithm == other.binarization_algorithm and \
+            self.threshold_value == other.threshold_value
+
 class JobDefinition:
     
     SORT_FIRST_PAGE = "first_page"
     SORT_SHEETS = "sort sheets"
     def __init__(self):
-        
+
+        self.mode_change_definitions = {}
+        self.mode_change_definitions['default'] = ModeChangeDefinition()        
         self.task = None
         self.fileinfos = []
         self.resolution_change = None
-        self.modus_change = None
-        self.binarization_algorithm = FLOYD_STEINBERG
-        self.threshold_value = 127
+        self.correct_res_only = False
+        self.denoise = False
         self.output_path = None
+        
         self.split = False
         self.sort = None
+        
         self.rotation = 0
         self.last_rotation = None
         self.autorotation = False
         self.alternating_rotation = False
-        self.denoise = False
+
         self.pdfa = False
+        
         self.ocr = False
 
 @singleton
@@ -111,21 +126,26 @@ class FormatConversionService(object):
         self.image_file_operations = image_file_operations
         self.denoiser = denoiser
 
-    def perform_changes(self, img: Image, fileinfo: GraphicFileInfo, params: JobDefinition):
+    def perform_changes(self, img: Image, fileinfo: GraphicFileInfo, jobDefinition: JobDefinition):
         
         #img = self.enhance_contrast(img)
-        img, fileinfo = self.change_resolution(img, fileinfo, params)
-        img, fileinfo = self.change_mode(img, fileinfo, params)
-        img, fileinfo, params = self.rotate(img, fileinfo, params)
-        return img, fileinfo, params
+        img, fileinfo = self.change_resolution(img, fileinfo, jobDefinition)
+        img, fileinfo = self.change_mode(img, fileinfo, jobDefinition)
+        img, fileinfo, jobDefinition = self.rotate(img, fileinfo, jobDefinition)
+        return img, fileinfo, jobDefinition
 
     def load_image(self, fileinfo: GraphicFileInfo):
         
         return Image.open(fileinfo.filepath)
     
     def change_mode(self, img: Image, fileinfo: GraphicFileInfo, job_definition: JobDefinition):
+
+        if fileinfo.filename in job_definition.mode_change_definitions:
+            mode_change_definition = job_definition.mode_change_definitions[fileinfo.filename]
+        else:
+            mode_change_definition = job_definition.mode_change_definitions['default']
         
-        if job_definition.modus_change is None and not job_definition.denoise:
+        if mode_change_definition.modus_change is None and not job_definition.denoise:
             return img, fileinfo
         
         if img.mode == BLACK_AND_WHITE:
@@ -146,12 +166,13 @@ class FormatConversionService(object):
         
         # We now definitely have a gray image
         
-        if job_definition.modus_change == BLACK_AND_WHITE:
+        if mode_change_definition.modus_change == BLACK_AND_WHITE:
             fileinfo.rawmode = "1"
-            # Denoising, if requested, is a part of the binarization process
-            return self.binarize(img, job_definition), fileinfo
-        else:
-            return img, fileinfo
+            img = self.binarize(img, mode_change_definition)
+            if job_definition.denoise:
+                img = self.denoiser.denoise(img)
+        
+        return img, fileinfo
     
     def rotate(self, img: Image, fileinfo: GraphicFileInfo, job_definition: JobDefinition):
         
@@ -170,34 +191,32 @@ class FormatConversionService(object):
         
         return rotated, fileinfo, job_definition
     
-    def change_resolution(self, img: Image, fileinfo: GraphicFileInfo, params: JobDefinition):
+    def change_resolution(self, img: Image, fileinfo: GraphicFileInfo, job_definition: JobDefinition):
         
-        if params.resolution_change is None:
+        if job_definition.resolution_change is None:
             return img, fileinfo
         
-        try:
-            img = self.image_file_operations.change_resolution(img, params.resolution_change)
-        except MissingResolutionInfo:
-            return img, fileinfo
+        if job_definition.correct_res_only:
+            img = self.image_file_operations.set_resolution(img, job_definition.resolution_change)
+        else:    
+            try:
+                img = self.image_file_operations.change_resolution(img, job_definition.resolution_change)
+            except MissingResolutionInfo:
+                return img, fileinfo
         
-        fileinfo.info['dpi'] = (params.resolution_change, params.resolution_change)
+        fileinfo.info['dpi'] = (job_definition.resolution_change, job_definition.resolution_change)
         
         return img, fileinfo
         
-    def binarize(self, img: Image, params: JobDefinition):
+    def binarize(self, img: Image, mode_change_definition: ModeChangeDefinition):
         
-        if params.binarization_algorithm == FLOYD_STEINBERG:
+        if mode_change_definition.binarization_algorithm == FLOYD_STEINBERG:
             # Denoising does not make sense with floyd steinberg binarization
             return self.image_file_operations.binarization_floyd_steinberg(img)
-        if params.binarization_algorithm == THRESHOLD:
-            new_image = self.image_file_operations.binarization_fixed(img, params.threshold_value)
-        if params.binarization_algorithm == SAUVOLA:
-            new_image = self.image_file_operations.binarization_sauvola(img)
-        
-        if params.denoise:
-            return self.denoiser.denoise(new_image)
-        else:
-            return new_image
+        if mode_change_definition.binarization_algorithm == THRESHOLD:
+            return self.image_file_operations.binarization_fixed(img, mode_change_definition.threshold_value)
+        if mode_change_definition.binarization_algorithm == SAUVOLA:
+            return self.image_file_operations.binarization_sauvola(img)
 
     def split_image(self, img: Image):
         
