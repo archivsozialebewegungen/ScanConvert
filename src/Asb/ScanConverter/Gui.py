@@ -345,6 +345,7 @@ class Window(QWidget):
     
     def _file_clicked(self, widgetItem):
 
+        print("File clicked!")
         self.mode_change_active = False
         if self._is_exactly_one_row_selected():
             self.set_single_file_mode()
@@ -370,9 +371,8 @@ class Window(QWidget):
             
     def restore_default_mode(self):
 
-        self.single_file_mode = True
-        if self.single_file_mode:
-            self.modus_box.setStyleSheet("QGroupBox"
+        self.single_file_mode = False
+        self.modus_box.setStyleSheet("QGroupBox"
                                      "{"
                                      "}")
         self.show_current_mode_change_definition(self.job_definition.mode_change_definitions['default'])   
@@ -502,21 +502,38 @@ class Window(QWidget):
         
     def files_up(self):
         
+        selected_rows = []
         selection_model = self.file_list.selectionModel()
         for index in self.file_list.selectionModel().selectedRows():
             if index.row() == 0:
                 continue
+            selected_rows.append(index.row() - 1)
             self.flip_lines(index.row(), index.row() - 1)
+
         selection_model.clearSelection()
-    
+        self.file_list.setSelectionMode(QAbstractItemView.MultiSelection)
+        for row in selected_rows:
+            self.file_list.selectRow(row)
+        self.file_list.setSelectionMode(QAbstractItemView.ExtendedSelection)
+
     def files_down(self):
         
+        selected_rows = []
         selection_model = self.file_list.selectionModel()
-        for index in self.file_list.selectionModel().selectedRows():
+        indices = self.file_list.selectionModel().selectedRows()
+
+        # Must delete in reverse order
+        for index in reversed(sorted(indices)):
             if index.row() == len(self.fileinfos) - 1:
                 continue
+            selected_rows.append(index.row() + 1)
             self.flip_lines(index.row(), index.row() + 1)
+
         selection_model.clearSelection()
+        self.file_list.setSelectionMode(QAbstractItemView.MultiSelection)
+        for row in selected_rows:
+            self.file_list.selectRow(row)
+        self.file_list.setSelectionMode(QAbstractItemView.ExtendedSelection)
 
     def remove_files(self):
         
@@ -526,6 +543,8 @@ class Window(QWidget):
         for each_row in reversed(sorted(indices)):
             self.file_list.removeRow(each_row.row())
             del self.fileinfos[each_row.row()]
+            
+        self.restore_default_mode()
         
     def flip_lines(self, line1, line2):
         
