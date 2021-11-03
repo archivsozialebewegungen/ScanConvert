@@ -558,7 +558,7 @@ class Window(QWidget):
         
         dialog = QFileDialog()
         dialog.setFileMode(QFileDialog.ExistingFiles)
-        dialog.setNameFilter("Graphikdateien (*.jpg *.tif *.gif *.png)")
+        dialog.setNameFilter("Graphikdateien (*.jpg *.tif *.tiff *.gif *.png)")
         
         if dialog.exec_():
             filenames = dialog.selectedFiles()
