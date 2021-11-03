@@ -18,6 +18,8 @@ from lxml import etree, html
 from injector import singleton, inject
 from reportlab.lib.utils import ImageReader
 import io
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.units import inch
 
 INVISIBLE = 3
 
@@ -49,17 +51,17 @@ class PdfService:
         for image in images:
             if image is None:
                 continue
-            img_width, img_height = image.size
+            width_in_dots, height_in_dots = image.size
 
             try:
                 dpi = image.info['dpi'][0]
             except KeyError:
                 pass
             
-            page_width = img_width * 72 / dpi
-            page_height = img_height * 72 / dpi
+            page_width = width_in_dots * 72 / dpi
+            page_height = height_in_dots * 72 / dpi
             
-            pdf.setPageSize((page_width, page_height))
+            pdf.setPageSize((width_in_dots * inch / dpi, height_in_dots * inch / dpi))
 
             img_stream = io.BytesIO()
             image.save(img_stream, format='png')
