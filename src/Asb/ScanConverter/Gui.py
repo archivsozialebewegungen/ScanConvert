@@ -17,7 +17,6 @@ from Asb.ScanConverter.Services import FormatConversionService, GraphicFileInfo,
     SAUVOLA, ModeChangeDefinition
 from Asb.ScanConverter.Ocr.PdfService import PdfService
 import traceback
-from email.policy import default
 from copy import deepcopy
 
 
@@ -143,11 +142,8 @@ class Window(QWidget):
     
     def _is_exactly_one_row_selected(self):
 
-        currently_selected_items = 0
-        for row_no in range(0, self.file_list.rowCount()):
-            if self.file_list.item(row_no, 0).isSelected():
-                currently_selected_items += 1
-        return currently_selected_items == 1
+        indexes = self.file_list.selectionModel().selectedRows()
+        return len(indexes) == 1
 
     def _get_first_selected_file_info(self):
 
