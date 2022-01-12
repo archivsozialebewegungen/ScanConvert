@@ -292,7 +292,7 @@ class Window(QWidget):
         self.modus_layout.addWidget(self.bw_algo_select)
         
         slider_box = QHBoxLayout()
-        self.slider_value = QLabel("127")
+        self.slider_value = QLabel("160")
         slider_box.addWidget(self.slider_value)
         self.threshold_slider = QSlider(Qt.Horizontal)
         self.threshold_slider.setMaximum(255)
@@ -301,7 +301,7 @@ class Window(QWidget):
         self.threshold_slider.setTickPosition(QSlider.TicksBelow)
         self.threshold_slider.setTickInterval(20)
         self.threshold_slider.valueChanged.connect(self.slider_changed)
-        self.threshold_slider.setValue(127)
+        self.threshold_slider.setValue(160)
         slider_box.addWidget(self.threshold_slider)
         self.modus_layout.addLayout(slider_box)
         
