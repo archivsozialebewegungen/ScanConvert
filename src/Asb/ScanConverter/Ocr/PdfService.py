@@ -20,6 +20,8 @@ from reportlab.lib.utils import ImageReader
 import io
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import inch
+import tempfile
+from posix import system
 
 INVISIBLE = 3
 
@@ -84,7 +86,10 @@ class PdfService:
     
     def _convert_to_pdfa(self, job: JobDefinition):
         
-        raise Exception("PDF optimizing currently not supported")
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            tmpfile = "%s/output.pdf" % tmpdirname
+            system("ocrmypdf --skip-text %s %s" % (job.output_path, tmpfile))
+            system("mv %s %s" % (tmpfile, job.output_path))
     
     def collect_and_convert_images(self, infos, job: JobDefinition):
 

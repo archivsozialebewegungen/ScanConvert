@@ -18,6 +18,7 @@ from Asb.ScanConverter.Services import FormatConversionService, GraphicFileInfo,
 from Asb.ScanConverter.Ocr.PdfService import PdfService
 import traceback
 from copy import deepcopy
+from os.path import exists
 
 
 TASK_CONVERT_JPEG = "Jpegs nach tif konvertieren"
@@ -436,7 +437,15 @@ class Window(QWidget):
     def _get_pdfa_widget(self):
         
         self.pdfa_checkbox = QCheckBox("Graphiken optimieren und PDF/A erstellen")
+        self.pdfa_checkbox.setEnabled(self._ocrmypdf_available())
         return self.pdfa_checkbox
+
+    def _ocrmypdf_available(self):
+        '''
+        This is a very crude check for ocrmypdf.
+        TODO: Check for ocrmypdf somewhere in the executable path
+        '''
+        return exists("/usr/bin/ocrmypdf")
 
     def _get_ocr_widget(self):
         
