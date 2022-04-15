@@ -22,6 +22,17 @@ FLOYD_STEINBERG = "Nur Bilder"
 THRESHOLD = "Schwellwert"
 SAUVOLA = "Text optimal"
 
+class EmbeddedImageParameters:
+    
+    def __init__(self):
+        
+        self.x = None
+        self.y = None
+        self.width = None
+        self.height = None
+        self.algorithm = FLOYD_STEINBERG
+        self.threshold_value = 160
+
 class GraphicFileInfo:
     
     modes = {"1": BLACK_AND_WHITE, "L": GRAYSCALE, "RGB": COLOR,
@@ -37,6 +48,7 @@ class GraphicFileInfo:
         self.height = img.height
         self.info = img.info
         img.close()
+        self.embedded_images_parameters = []
     
     def update(self, img: Image):
 
@@ -110,6 +122,22 @@ class JobDefinition:
         self.pdfa = False
         
         self.ocr = False
+
+@singleton
+class ImageDetectionService:
+    '''
+    This is a dummy service that does nothing.
+    
+    TODO: Write a service that is able to perform image - text separation
+    and writes the rectangles in the embedded_images_parameters property
+    of the GraphicFileInfo object given as parameter. Probably this should
+    be done in sub projects, especially if there are heavy dependencies if
+    some machine learning models are used.
+    '''
+    
+    def detect_images(self, graphic_file_info: GraphicFileInfo):
+        
+        pass
 
 @singleton
 class FormatConversionService(object):

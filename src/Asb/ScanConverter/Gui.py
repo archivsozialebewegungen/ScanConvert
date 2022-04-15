@@ -9,17 +9,20 @@ import threading
 
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QLabel, QApplication, QPushButton, QTableWidget, QVBoxLayout, QHBoxLayout, QWidget, QFileDialog, QTableWidgetItem, QAbstractItemView, \
-    QComboBox, QRadioButton, QButtonGroup, QGroupBox, QSlider, QCheckBox
-from injector import Injector, inject, singleton
+    QComboBox, QRadioButton, QButtonGroup, QGroupBox, QSlider, QCheckBox,\
+    QDialog, QDialogButtonBox
+from injector import Injector, inject, singleton, Module, BoundKey, Binder
 
 from Asb.ScanConverter.Services import FormatConversionService, GraphicFileInfo, \
-    JobDefinition, GRAYSCALE, BLACK_AND_WHITE, FLOYD_STEINBERG, THRESHOLD, \
+    JobDefinition, ImageDetectionService, GRAYSCALE, BLACK_AND_WHITE, FLOYD_STEINBERG, THRESHOLD, \
     SAUVOLA, ModeChangeDefinition
 from Asb.ScanConverter.Ocr.PdfService import PdfService
 import traceback
 from copy import deepcopy
 from os.path import exists
+import qpageview
 
+IMAGE_DETECTION_SERVICE = BoundKey('image_detection_service')
 
 TASK_CONVERT_JPEG = "Jpegs nach tif konvertieren"
 TASK_COLLATE_TO_PDF = "Als pdf zusammenfassen"
@@ -83,13 +86,39 @@ class TaskManager():
             self.message_function()
         
         self.worker_thread_running = False
+ 
+class FileViewDialog(QDialog):
     
+    def __init__(self, file_info: GraphicFileInfo):
+        super().__init__()
+        self.resize(1200, 800)
+
+        self.file_info = file_info
+        self.setWindowTitle(self.file_info.filename)
+
+        QBtn = QDialogButtonBox.Ok | QDialogButtonBox.Cancel
+
+        self.buttonBox = QDialogButtonBox(QBtn)
+        self.buttonBox.accepted.connect(self.accept)
+        self.buttonBox.rejected.connect(self.reject)
+
+        view = qpageview.View()
+        #view.resize(1200, 800)
+        view.loadImages((self.file_info.filepath,))
+        view.show()
+
+
+        self.layout = QVBoxLayout()
+        self.layout.addWidget(view)
+        self.layout.addWidget(self.buttonBox)
+        self.setLayout(self.layout)    
+
     
 class Window(QWidget):
     
 
     @inject
-    def __init__(self, task_manager: TaskManager):
+    def __init__(self, task_manager: TaskManager, image_detection_service: IMAGE_DETECTION_SERVICE):
         super().__init__()
         self.single_file_mode = False
         self.mode_change_active = True
@@ -97,6 +126,7 @@ class Window(QWidget):
         self.job_definition = JobDefinition()
 
         self.task_manager = task_manager
+        self.image_detection_service = image_detection_service
         self.createWidgets()
         self.task_manager.message_function = self.show_job_status
         self.show_job_status()
@@ -168,34 +198,46 @@ class Window(QWidget):
         left_column.addWidget(self._get_file_list_widget())
 
         right_column = QVBoxLayout()
+
+        right_column_top = QHBoxLayout()
         
-        right_column.addWidget(QLabel("Aufgabe:"))
+        right_column_sub1 = QVBoxLayout()
+        
+        right_column_sub1.addWidget(QLabel("Aufgabe:"))
         self.task_select = QComboBox()
         self.task_select.addItem(TASK_COLLATE_TO_PDF)
         self.task_select.addItem(TASK_CONVERT_JPEG)
-        right_column.addWidget(self.task_select)
+        right_column_sub1.addWidget(self.task_select)
         
         res_box = self._get_resolution_box()
-        right_column.addWidget(res_box)
+        right_column_sub1.addWidget(res_box)
         
         rotate_box = self._get_rotate_box()
-        right_column.addLayout(rotate_box)
+        right_column_sub1.addLayout(rotate_box)
         
         modus_box = self._get_modus_box()
-        right_column.addWidget(modus_box)
+        right_column_sub1.addWidget(modus_box)
+
+        right_column_sub2 = QVBoxLayout()
+
+        right_column_sub2.addWidget(self._get_image_box())
 
         sort_box = self._get_sort_box()
-        right_column.addWidget(sort_box)
+        right_column_sub2.addWidget(sort_box)
 
         ocr_widget = self._get_ocr_widget()
-        right_column.addWidget(ocr_widget)
+        right_column_sub2.addWidget(ocr_widget)
 
         denoise_widget = self._get_denoise_widget()
-        right_column.addWidget(denoise_widget)
+        right_column_sub2.addWidget(denoise_widget)
 
         pdfa_widget = self._get_pdfa_widget()
-        right_column.addWidget(pdfa_widget)
+        right_column_sub2.addWidget(pdfa_widget)
 
+        right_column_top.addLayout(right_column_sub1)
+        right_column_top.addLayout(right_column_sub2)
+
+        right_column.addLayout(right_column_top)
         run_button = QPushButton("Aufgabe ausführen")
         run_button.clicked.connect(self.add_task)
         right_column.addWidget(run_button)
@@ -353,6 +395,7 @@ class Window(QWidget):
     def set_single_file_mode(self):
         
         self.single_file_mode = True
+        self.mark_image_button.setEnabled(True)
         self.modus_box.setStyleSheet("QGroupBox"
                                      "{"
                                      "background-color: red;"
@@ -369,6 +412,7 @@ class Window(QWidget):
     def restore_default_mode(self):
 
         self.single_file_mode = False
+        self.mark_image_button.setEnabled(False)
         self.modus_box.setStyleSheet("QGroupBox"
                                      "{"
                                      "}")
@@ -410,8 +454,7 @@ class Window(QWidget):
         if self._is_exactly_one_row_selected():
             raise Exception("We are in single file mode!")
 
-        self.job_definition.mode_change_definitions['default'] = current_mode_change
-            
+        self.job_definition.mode_change_definitions['default'] = current_mode_change    
 
     def compile_mode_change(self):
 
@@ -451,6 +494,26 @@ class Window(QWidget):
         
         self.ocr_checkbox = QCheckBox("Texterkennung ausführen")
         return self.ocr_checkbox
+
+    def _get_image_box(self):
+        
+        image_box = QGroupBox("Bilder")
+        image_layout = QVBoxLayout()
+
+        self.mark_image_button = QPushButton("Bilder markieren")
+        self.mark_image_button.setEnabled(False)
+        self.mark_image_button.clicked.connect(self._mark_images)
+        
+        image_layout.addWidget(self.mark_image_button)
+        image_box.setLayout(image_layout)
+        
+        return image_box
+    
+    def _mark_images(self):
+        
+        selected_file_info = self._get_first_selected_file_info()
+        dialog = FileViewDialog(selected_file_info)
+        dialog.exec()
 
     def _get_sort_box(self):
         
@@ -645,11 +708,19 @@ class Window(QWidget):
         if self.resolution_400.isChecked():
             return 400
         return None
+
+class ScanConverterModule(Module):
+    
+    def configure(self, binder:Binder)->None:
+        binder.bind(IMAGE_DETECTION_SERVICE, ImageDetectionService, singleton)
+        Module.configure(self, binder)
                      
 if __name__ == '__main__':
+    
+    
     app = QApplication(sys.argv)
 
-    injector = Injector()
+    injector = Injector([ScanConverterModule])
     win = injector.get(Window)
     win.show()
     sys.exit(app.exec_())
