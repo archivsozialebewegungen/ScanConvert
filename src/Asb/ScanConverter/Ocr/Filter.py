@@ -3,8 +3,6 @@ Created on 10.08.2021
 
 @author: michael
 '''
-from Asb.ScanConverter.Services import GraphicFileInfo, COLOR, COLOR_WITH_ALPHA,\
-    GRAYSCALE
 from PIL import Image, ImageOps
 import numpy
 from skimage.filters.thresholding import threshold_sauvola

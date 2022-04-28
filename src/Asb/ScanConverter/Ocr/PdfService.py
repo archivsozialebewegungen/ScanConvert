@@ -95,7 +95,7 @@ class PdfService:
 
         images = []        
         for image_info in infos:
-            img = self.image_ops.load_image(image_info.filepath)
+            img = self.image_ops.load_image(image_info)
 
             converted_img, image_info, job = self.format_conversion_service.perform_changes(img, image_info, job)
             

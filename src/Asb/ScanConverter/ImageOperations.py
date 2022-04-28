@@ -6,7 +6,7 @@ Created on 29.03.2021
 from Asb.ScanConverter.ImageTypeConversion import ndarray_to_pil, \
     pil_to_native_cv2image, native_cv2image_to_pil, pil_to_rgb_cv2image, \
     rgb_cv2image_to_pil, pil_to_ndarray
-from PIL import Image, ImageOps, ImageFilter
+from PIL import Image, ImageFilter
 from injector import singleton
 from skimage.filters.thresholding import threshold_otsu, threshold_sauvola
 import cv2
@@ -14,12 +14,111 @@ import numpy
 import pytesseract
 import re
 from Asb.ScanConverter.Ocr.Alto import AltoPageLayout
+import os
+
+Image.MAX_IMAGE_PIXELS = None
+
+BLACK_AND_WHITE = "Schwarz-Weiß"
+GRAYSCALE = "Graustufen"
+COLOR = "Farbe"
+COLOR_WITH_ALPHA = "Farbe mit Transparenz"
+INDEX = "Indexiert"
+
+FLOYD_STEINBERG = "Nur Bilder"
+THRESHOLD = "Schwellwert"
+SAUVOLA = "Text optimal"
 
 class MissingResolutionInfo(Exception):
     
     pass
 
+class EmbeddedImageParameters:
     
+    def __init__(self):
+        
+        self.x = None
+        self.y = None
+        self.width = None
+        self.height = None
+        self.algorithm = FLOYD_STEINBERG
+        self.threshold_value = 160
+        
+    def is_initialized(self):
+        
+        return self.x != None
+
+class GraphicFileInfo:
+    
+    modes = {"1": BLACK_AND_WHITE, "L": GRAYSCALE, "RGB": COLOR,
+             "RGBA": COLOR_WITH_ALPHA, "P": INDEX}
+    
+    def __init__(self, filepath):
+        
+        self.filepath = filepath
+        img = Image.open(filepath)
+        self.format = type(img).__name__.replace('ImageFile', '')
+        self.rawmode = img.mode
+        self.width = img.width
+        self.height = img.height
+        self.info = img.info
+        img.close()
+        self.embedded_images_parameters = []
+    
+    def update(self, img: Image):
+
+        self.rawmode = img.mode
+        self.width = img.width
+        self.height = img.height
+        
+    def _get_resolution(self):
+        
+        if "dpi" in self.info:
+            dpi = self.info['dpi']
+            if dpi[0] == 1:
+                return "Unbekannt"
+            if dpi[0] == dpi[1]:
+                return "%s" % dpi[0]
+            else:
+                return "%sx%s" % dpi
+        return "Unbekannt"
+    
+    def _get_filename(self):
+        
+        return os.path.basename(self.filepath)
+    
+    def _get_mode(self):
+        
+        if self.rawmode in self.modes:
+            return self.modes[self.rawmode]
+        
+        return "Unbekannt (%s)" % self.rawmode
+    
+    def get_image_mask(self):
+        
+        mask = numpy.zeros((self.height, self.width), dtype=bool)
+        for image_region in self.embedded_images_parameters:
+            mask[image_region.y:image_region.y + image_region.height, 
+                 image_region.x:image_region.x + image_region.width] = True
+        
+        return Image.fromarray(mask)
+
+    def get_text_mask(self):
+        
+        mask = numpy.ones((self.height, self.width), dtype=bool)
+        for image_region in self.embedded_images_parameters:
+            mask[image_region.y:image_region.y + image_region.height, 
+                 image_region.x:image_region.x + image_region.width] = False
+        
+        return Image.fromarray(mask)
+
+    def has_images(self):
+        
+        return self.embedded_images_parameters > 0
+
+    resolution = property(_get_resolution)
+    filename = property(_get_filename)
+    mode = property(_get_mode)
+
 @singleton
 class ImageFileOperations:
     '''
@@ -35,9 +134,9 @@ class ImageFileOperations:
         self.dilation_kernel = numpy.ones((2, 2), 'uint8')
         self.erosion_kernel = numpy.ones((2, 2), 'uint8')
         
-    def load_image(self, filename: str) -> Image:
-        
-        return Image.open(filename)
+    def load_image(self, qualified_file_name: str) -> Image:
+    
+        return Image.open(qualified_file_name)
     
     def save_image(self, img: Image, filename: str):
         
@@ -177,6 +276,12 @@ class ImageFileOperations:
         original_height, original_width = cv2_img.shape[:2]
         resized_image = cv2.resize(cv2_img, (int(original_width*factor), int(original_height*factor)), interpolation=cv2.INTER_CUBIC )
         return rgb_cv2image_to_pil(resized_image, (int(orig_xres * factor), int(orig_yres * factor)))
+
+    def apply_mask(self, img: Image, mask: Image) -> Image:
+        
+        graphic_copy = img.copy()
+        graphic_copy.paste(255, mask=mask)
+        return graphic_copy
 
     def binarization_floyd_steinberg(self, img) -> Image:
         '''

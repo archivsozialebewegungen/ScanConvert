@@ -7,20 +7,22 @@ Created on 13.02.2021
 import sys
 import threading
 
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QSize, QRect, QPoint
 from PyQt5.QtWidgets import QLabel, QApplication, QPushButton, QTableWidget, QVBoxLayout, QHBoxLayout, QWidget, QFileDialog, QTableWidgetItem, QAbstractItemView, \
     QComboBox, QRadioButton, QButtonGroup, QGroupBox, QSlider, QCheckBox,\
     QDialog, QDialogButtonBox
 from injector import Injector, inject, singleton, Module, BoundKey, Binder
-
-from Asb.ScanConverter.Services import FormatConversionService, GraphicFileInfo, \
-    JobDefinition, ImageDetectionService, GRAYSCALE, BLACK_AND_WHITE, FLOYD_STEINBERG, THRESHOLD, \
-    SAUVOLA, ModeChangeDefinition
+from Asb.ScanConverter.ImageOperations import ImageFileOperations,\
+    MissingResolutionInfo, SAUVOLA, GraphicFileInfo, BLACK_AND_WHITE,\
+    FLOYD_STEINBERG, THRESHOLD, GRAYSCALE, EmbeddedImageParameters
 from Asb.ScanConverter.Ocr.PdfService import PdfService
 import traceback
 from copy import deepcopy
 from os.path import exists
 import qpageview
+from qpageview.rubberband import Rubberband
+from Asb.ScanConverter.Services import FormatConversionService, JobDefinition,\
+    ModeChangeDefinition, ImageDetectionService
 
 IMAGE_DETECTION_SERVICE = BoundKey('image_detection_service')
 
@@ -96,24 +98,75 @@ class FileViewDialog(QDialog):
         self.file_info = file_info
         self.setWindowTitle(self.file_info.filename)
 
-        QBtn = QDialogButtonBox.Ok | QDialogButtonBox.Cancel
+        top_box = QHBoxLayout()
+        
+        self.image_select = QComboBox()
+        self.image_select.addItem("Neues Bild")
+        image_counter = 0
+        for image in self.file_info.embedded_images_parameters:
+            image_counter += 1
+            self.image_select.addItem("Bild %d" % image_counter)
+        self.image_select.currentIndexChanged.connect(self._image_changed)
+        top_box.addWidget(self.image_select)
 
+        
+        save_button = QPushButton("Auswahl festhalten")
+        save_button.clicked.connect(self._add_selection)
+        top_box.addWidget(save_button)
+
+        view = qpageview.View()
+        view.setViewMode(qpageview.FitWidth)
+        view.loadImages((self.file_info.filepath,))
+        self.rubberband = Rubberband()
+        self.rubberband.showbutton = Qt.LeftButton
+        view.setRubberband(self.rubberband)
+        view.show()
+
+        QBtn = QDialogButtonBox.Ok | QDialogButtonBox.Cancel
         self.buttonBox = QDialogButtonBox(QBtn)
         self.buttonBox.accepted.connect(self.accept)
         self.buttonBox.rejected.connect(self.reject)
 
-        view = qpageview.View()
-        #view.resize(1200, 800)
-        view.loadImages((self.file_info.filepath,))
-        view.show()
-
-
         self.layout = QVBoxLayout()
+        self.layout.addLayout(top_box)
         self.layout.addWidget(view)
         self.layout.addWidget(self.buttonBox)
         self.setLayout(self.layout)    
 
-    
+    def _image_changed(self):
+        
+        image_index = self.image_select.currentIndex()
+        if image_index != 0:
+            embedded_image_params = self.file_info.embedded_images_parameters[image_index - 1]
+            if embedded_image_params.is_initialized():
+                self.rubberband.setSelection(
+                    QRect(
+                        QPoint(embedded_image_params.x, embedded_image_params.y), 
+                        QSize(embedded_image_params.width, embedded_image_params.height)
+                    )
+                )
+
+    def _add_selection(self):
+        
+        if not self.rubberband.hasSelection():
+            return
+        
+        coordinates = self.rubberband.selection()
+        
+        image_index = self.image_select.currentIndex()
+        if image_index == 0:
+            image_params = EmbeddedImageParameters()
+            self.file_info.embedded_images_parameters.append(image_params)
+            self.image_select.addItem("Bild %d" % len(self.file_info.embedded_images_parameters))
+            self.image_select.setCurrentIndex(len(self.file_info.embedded_images_parameters))
+        else:
+            image_params = self.file_info.embedded_images_parameters[image_index - 1]
+        
+        image_params.x = coordinates.x()
+        image_params.y = coordinates.y()
+        image_params.width = coordinates.width()
+        image_params.height = coordinates.height()            
+        
 class Window(QWidget):
     
 

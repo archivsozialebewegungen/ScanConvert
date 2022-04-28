@@ -5,83 +5,12 @@ Created on 16.02.2021
 '''
 from PIL import Image, ImageOps
 import os
-from injector import singleton, inject
+from injector import singleton, inject, Inject
 from Asb.ScanConverter.ImageOperations import ImageFileOperations,\
-    MissingResolutionInfo
+    MissingResolutionInfo, SAUVOLA, GraphicFileInfo, BLACK_AND_WHITE,\
+    FLOYD_STEINBERG, THRESHOLD, GRAYSCALE
 from Asb.ScanConverter.Ocr.Denoiser import DenoiseService
-
-Image.MAX_IMAGE_PIXELS = None
-
-BLACK_AND_WHITE = "Schwarz-Weiß"
-GRAYSCALE = "Graustufen"
-COLOR = "Farbe"
-COLOR_WITH_ALPHA = "Farbe mit Transparenz"
-INDEX = "Indexiert"
-
-FLOYD_STEINBERG = "Nur Bilder"
-THRESHOLD = "Schwellwert"
-SAUVOLA = "Text optimal"
-
-class EmbeddedImageParameters:
-    
-    def __init__(self):
-        
-        self.x = None
-        self.y = None
-        self.width = None
-        self.height = None
-        self.algorithm = FLOYD_STEINBERG
-        self.threshold_value = 160
-
-class GraphicFileInfo:
-    
-    modes = {"1": BLACK_AND_WHITE, "L": GRAYSCALE, "RGB": COLOR,
-             "RGBA": COLOR_WITH_ALPHA, "P": INDEX}
-    
-    def __init__(self, filepath):
-        
-        self.filepath = filepath
-        img = Image.open(filepath)
-        self.format = type(img).__name__.replace('ImageFile', '')
-        self.rawmode = img.mode
-        self.width = img.width
-        self.height = img.height
-        self.info = img.info
-        img.close()
-        self.embedded_images_parameters = []
-    
-    def update(self, img: Image):
-
-        self.rawmode = img.mode
-        self.width = img.width
-        self.height = img.height
-        
-    def _get_resolution(self):
-        
-        if "dpi" in self.info:
-            dpi = self.info['dpi']
-            if dpi[0] == 1:
-                return "Unbekannt"
-            if dpi[0] == dpi[1]:
-                return "%s" % dpi[0]
-            else:
-                return "%sx%s" % dpi
-        return "Unbekannt"
-    
-    def _get_filename(self):
-        
-        return os.path.basename(self.filepath)
-    
-    def _get_mode(self):
-        
-        if self.rawmode in self.modes:
-            return self.modes[self.rawmode]
-        
-        return "Unbekannt (%s)" % self.rawmode
-    
-    resolution = property(_get_resolution)
-    filename = property(_get_filename)
-    mode = property(_get_mode)
+import numpy
 
 class ModeChangeDefinition:
     
@@ -162,10 +91,6 @@ class FormatConversionService(object):
         img, fileinfo, jobDefinition = self.rotate(img, fileinfo, jobDefinition)
         return img, fileinfo, jobDefinition
 
-    def load_image(self, fileinfo: GraphicFileInfo):
-        
-        return Image.open(fileinfo.filepath)
-    
     def change_mode(self, img: Image, fileinfo: GraphicFileInfo, job_definition: JobDefinition):
 
         if fileinfo.filename in job_definition.mode_change_definitions:
