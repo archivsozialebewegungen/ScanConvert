@@ -14,7 +14,7 @@ from injector import Injector, inject, singleton
 
 from Asb.ScanConverter.Services import FormatConversionService, GraphicFileInfo, \
     JobDefinition, GRAYSCALE, BLACK_AND_WHITE, FLOYD_STEINBERG, THRESHOLD, \
-    SAUVOLA, ModeChangeDefinition
+    SAUVOLA, ModeChangeDefinition, OTSU
 from Asb.ScanConverter.Ocr.PdfService import PdfService
 import traceback
 from copy import deepcopy
@@ -287,24 +287,24 @@ class Window(QWidget):
         
         self.bw_algo_select = QComboBox()
         self.bw_algo_select.addItem(SAUVOLA)
+        self.bw_algo_select.addItem(OTSU)
         self.bw_algo_select.addItem(FLOYD_STEINBERG)
-        self.bw_algo_select.addItem(THRESHOLD)
         self.bw_algo_select.currentIndexChanged.connect(self.bw_algo_changed)
         self.modus_layout.addWidget(self.bw_algo_select)
         
-        slider_box = QHBoxLayout()
-        self.slider_value = QLabel("160")
-        slider_box.addWidget(self.slider_value)
-        self.threshold_slider = QSlider(Qt.Horizontal)
-        self.threshold_slider.setMaximum(255)
-        self.threshold_slider.setMinimum(0)
-        self.threshold_slider.setSingleStep(1)
-        self.threshold_slider.setTickPosition(QSlider.TicksBelow)
-        self.threshold_slider.setTickInterval(20)
-        self.threshold_slider.valueChanged.connect(self.slider_changed)
-        self.threshold_slider.setValue(160)
-        slider_box.addWidget(self.threshold_slider)
-        self.modus_layout.addLayout(slider_box)
+        #slider_box = QHBoxLayout()
+        #self.slider_value = QLabel("160")
+        #slider_box.addWidget(self.slider_value)
+        #self.threshold_slider = QSlider(Qt.Horizontal)
+        #self.threshold_slider.setMaximum(255)
+        #self.threshold_slider.setMinimum(0)
+        #self.threshold_slider.setSingleStep(1)
+        #self.threshold_slider.setTickPosition(QSlider.TicksBelow)
+        #self.threshold_slider.setTickInterval(20)
+        #self.threshold_slider.valueChanged.connect(self.slider_changed)
+        #self.threshold_slider.setValue(160)
+        #slider_box.addWidget(self.threshold_slider)
+        #self.modus_layout.addLayout(slider_box)
         
         self.toggle_bw_algo_activation()
         
@@ -321,16 +321,16 @@ class Window(QWidget):
             self.bw_algo_changed(None)
         else:
             self.bw_algo_select.setEnabled(False)
-            self.threshold_slider.setEnabled(False)
+            #self.threshold_slider.setEnabled(False)
             
         self._register_mode_change()
     
     def bw_algo_changed(self, value):
         
-        if self.bw_algo_select.currentText() == THRESHOLD:
-            self.threshold_slider.setEnabled(True)
-        else:
-            self.threshold_slider.setDisabled(True)
+        #if self.bw_algo_select.currentText() == THRESHOLD:
+        #    self.threshold_slider.setEnabled(True)
+        #else:
+        #    self.threshold_slider.setDisabled(True)
             
         self._register_mode_change()
         
@@ -342,7 +342,6 @@ class Window(QWidget):
     
     def _file_clicked(self, widgetItem):
 
-        print("File clicked!")
         self.mode_change_active = False
         if self._is_exactly_one_row_selected():
             self.set_single_file_mode()
@@ -418,13 +417,13 @@ class Window(QWidget):
         mode_change_definition = ModeChangeDefinition()
         mode_change_definition.modus_change = self._get_modus()
         mode_change_definition.binarization_algorithm = self.bw_algo_select.currentText()
-        mode_change_definition.threshold_value = int(self.threshold_slider.value())
+        #mode_change_definition.threshold_value = int(self.threshold_slider.value())
         return mode_change_definition
 
     def show_current_mode_change_definition(self, mode_change_definition: ModeChangeDefinition):
         
         self._set_modus(mode_change_definition.modus_change)
-        self.threshold_slider.setValue(mode_change_definition.threshold_value)
+        #self.threshold_slider.setValue(mode_change_definition.threshold_value)
         for idx in range(0, self.bw_algo_select.count()):
             if self.bw_algo_select.itemText(idx) == mode_change_definition.binarization_algorithm:
                 self.bw_algo_select.setCurrentIndex(idx)

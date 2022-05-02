@@ -86,6 +86,10 @@ class PdfService:
     
     def _convert_to_pdfa(self, job: JobDefinition):
         
+        # It is much too complicated to use the code of ocrmypdf directly
+        # because of real ugly dependencies. So it is much more easy to
+        # check if ocrmypdf is installed and use it from the command line.
+        
         with tempfile.TemporaryDirectory() as tmpdirname:
             tmpfile = "%s/output.pdf" % tmpdirname
             system("ocrmypdf --skip-text %s %s" % (job.output_path, tmpfile))

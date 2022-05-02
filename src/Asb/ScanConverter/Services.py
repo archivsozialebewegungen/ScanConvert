@@ -19,6 +19,7 @@ COLOR_WITH_ALPHA = "Farbe mit Transparenz"
 INDEX = "Indexiert"
 
 FLOYD_STEINBERG = "Nur Bilder"
+OTSU = "Text und Bilder"
 THRESHOLD = "Schwellwert"
 SAUVOLA = "Text optimal"
 
@@ -215,6 +216,8 @@ class FormatConversionService(object):
             return self.image_file_operations.binarization_floyd_steinberg(img)
         if mode_change_definition.binarization_algorithm == THRESHOLD:
             return self.image_file_operations.binarization_fixed(img, mode_change_definition.threshold_value)
+        if mode_change_definition.binarization_algorithm == OTSU:
+            return self.image_file_operations.binarization_otsu(img)
         if mode_change_definition.binarization_algorithm == SAUVOLA:
             return self.image_file_operations.binarization_sauvola(img)
 
