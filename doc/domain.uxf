@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<diagram program="umlet" version="15.0.0">
+  <zoom_level>10</zoom_level>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>220</x>
+      <y>30</y>
+      <w>170</w>
+      <h>100</h>
+    </coordinates>
+    <panel_attributes>AbstractImage
+--
++width: int
++height: int
++resolution: int
++mode: RGB|Gray|BW
+</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>30</x>
+      <y>160</y>
+      <w>290</w>
+      <h>100</h>
+    </coordinates>
+    <panel_attributes>Scan
+--
++rotation_angle: int
++no_of_pages: int
+--
++get_page(page_no: int): Page
++get_page_array(page_no: int): ndarray</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>340</x>
+      <y>160</y>
+      <w>230</w>
+      <h>100</h>
+    </coordinates>
+    <panel_attributes>Page
+--
++scan: Scan
++page_no: int
++illustration_regions: Region[]
+--
++get_page_array: ndarray</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>360</x>
+      <y>120</y>
+      <w>30</w>
+      <h>60</h>
+    </coordinates>
+    <panel_attributes>lt=&lt;&lt;-</panel_attributes>
+    <additional_attributes>10.0;10.0;10.0;40.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>240</x>
+      <y>120</y>
+      <w>30</w>
+      <h>60</h>
+    </coordinates>
+    <panel_attributes>lt=&lt;&lt;-</panel_attributes>
+    <additional_attributes>10.0;10.0;10.0;40.0</additional_attributes>
+  </element>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>30</x>
+      <y>290</y>
+      <w>100</w>
+      <h>100</h>
+    </coordinates>
+    <panel_attributes>Region
+--
+x: int
+y: int
+width: int
+height: int</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>160</x>
+      <y>290</y>
+      <w>450</w>
+      <h>70</h>
+    </coordinates>
+    <panel_attributes>PageTransformationService
+--
+--
+convertToGray(Page): Page
+convertToBW(Page, TextAlgorithm, IllustrationAlgorithm): Page</panel_attributes>
+    <additional_attributes/>
+  </element>
+</diagram>
