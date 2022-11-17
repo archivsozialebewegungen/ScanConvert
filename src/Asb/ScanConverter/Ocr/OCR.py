@@ -16,6 +16,8 @@ from enchant.checker import SpellChecker
 import torch
 from pytorch_pretrained_bert import BertTokenizer, BertForMaskedLM
 from difflib import SequenceMatcher
+import spacy
+import contextualSpellCheck
 
 @singleton
 class OcrPreprocessor:
@@ -108,8 +110,23 @@ class OcrPostprocessor:
     def remove_hyphenation(self, text: str) -> str:
         
         return re.sub("(?<=\w)-\s+", '', text, flags=re.DOTALL)
-    
+
+    def split_into_sentences(self, text: str) -> [str]:
+
+        return [ sentence.strip() for sentence in re.split("(?<=\.\s)", text, flags=re.DOTALL) if sentence.strip() != '']
+
     def fix_word_via_spellchecker_and_bert(self, text: str) -> str:
+        
+        nlp = spacy.load("de_dep_news_trf")
+        contextualSpellCheck.add_to_pipe(nlp)
+        doc = nlp(text)
+
+        if doc._.performed_spellCheck:
+            return doc._.outcome_spellCheck 
+        
+        return text
+    
+    def fix_word_via_spellchecker_and_bert_old(self, text: str) -> str:
         
         suggested_corrections = self.get_suggested_corrections(text)
         # replace incorrect words with [MASK]
@@ -193,6 +210,7 @@ class OcrPostprocessor:
 
 
     tokenizer = property(_get_tokenizer)
+    
 @singleton
 class OcrRunner:
     

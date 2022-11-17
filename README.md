@@ -24,4 +24,8 @@ so it is necessary to install them beforehand.
     pip3 install wheel
     pip3 install torch==1.8.1
     pip3 install -r requirements.txt
+    
+### Download the spacy model
+
+    python -m spacy download de_dep_news_trf
  

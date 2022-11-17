@@ -19,6 +19,9 @@ from injector import singleton, inject
 from reportlab.lib.utils import ImageReader
 import io
 
+from libxmp import XMPFiles, consts
+from libxmp.core import XMPMeta
+
 INVISIBLE = 3
 
 @singleton
@@ -203,3 +206,28 @@ class PdfService:
         relative to the bottom left corner of the bounding box
         '''
         return x * poly[0] + poly[1]
+    
+class XMPMetadata:
+    
+    def __init__(self, filename):
+        
+        self.filename = filename
+        self.xmpfile = XMPFiles(file_path=self.filename, open_forupdate=True)
+        self.xmp = self.xmpfile.get_xmp()
+        if self.xmp is None:
+            self.xmp = XMPMeta()
+        if not self.xmpfile.can_put_xmp(self.xmp):
+            raise Exception("It is not possible to change xmp metadata in %s." % self.filename)
+
+    def add_subject(self, subject, gnd=None):
+        
+        self.xmp.append_array_item(consts.XMP_NS_DC, 'subject', subject, {'prop_array_is_ordered': False, 'prop_value_is_array': True})
+
+    def write_changes(self):
+        
+        self.xmpfile.put_xmp(self.xmp)
+        self.xmpfile.close_file()
+        self.xmpfile = None
+        self.xmp = None
+        
+        
